@@ -147,6 +147,7 @@ sub get_captcha {
 sub check_captcha {
 	my ($challenge, $answer, $to_check) = @_;
 	use Scalar::Util 'looks_like_number';
+	$to_check =~ tr/,/./;
 	return (looks_like_number($to_check) and abs($to_check - $answer) <= 1e-2);
 }
 
