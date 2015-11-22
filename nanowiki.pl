@@ -278,7 +278,8 @@ __DATA__
 	<%= captcha_field; %><br>
 	<input type="submit" name="preview" value="Preview (without saving)">
 	<input type="submit" name="exit" value="Save & exit">
-	<input type="submit" value="Save & continue editing">
+	<input type="submit" value="Save & continue editing"><br>
+	For more info on the markup used see <a href="http://txstyle.org/">Textile</a>.
 </form>
 
 @@ layouts/default.html.ep
