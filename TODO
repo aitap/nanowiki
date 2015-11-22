@@ -1,4 +1,4 @@
-+ SQL:
++ SQL
  + create table
  + create index
  + select
@@ -15,7 +15,7 @@
   + CSRF
   + CAPTCHA
    + 2 + 2 * 2
-- style
++ style
 - special CAPTCHA
  - тест по русскому
  - ТМ

@@ -252,21 +252,23 @@ __DATA__
 <% if (my $revisions = $self->stash("history")) { %>
 	<p class="history"><!-- TODO --></p>
 <% } %>
-<div class="content"><%== $html %></p>
-<a href="?edit">Edit</a> <!--<a href="?rev">History</a>-->
+<div class="content"><%== $html %></div>
+<div class="footer"><a href="?edit">Edit</a> <!--<a href="?rev">History</a>--></div>
 
 @@ edit.html.ep
 % layout 'default';
 <% if (my $msg = $self->stash("msg")) { %>
-	<h2><%= $msg %></h2>
+	<div class="message"><%= $msg %></div>
 <% } %>
 <form method="post">
 	%= csrf_field;
-	<div class="textarea">
-		<textarea id="src" name="src"><%= $src %></textarea>
-	</div>
-	<div class="preview">
-		<%== $html %>
+	<div class="edit_container">
+		<div class="textarea">
+			<textarea id="src" name="src" rows=10><%= $src %></textarea>
+		</div>
+		<div class="preview">
+			<%== $html %>
+		</div>
 	</div>
 	<%= captcha_field; %><br>
 	<input type="submit" name="preview" value="Preview (without saving)">
@@ -280,21 +282,57 @@ __DATA__
 	<head>
 		<title><%= title_from_path() %></title>
 		<style type="text/css">
-			...
+			.header {
+				text-align: center;
+			}
+			.children {
+				float: left;
+				width: 18%;
+				background-color: #eeeeee;
+				margin: 10px;
+				border-radius: 5px;
+			}
+			.content_block {
+				margin-left: 20%;
+			}
+			.path_links, .footer {
+				border: 1px solid black;
+			}
+			.edit_container {
+				display: block;
+				overflow: auto;
+				width: 100%;
+			}
+			.textarea, .preview {
+				width: 49%;
+				float: left;
+			}
+			textarea {
+				width: 90%;
+				height: auto;
+			}
+			.message {
+				background: #ffeeee;
+				border-radius: 10px;
+				border: 1px solid #110000;
+				text-align: center;
+			}
 		</style>
 	</head>
 	<body>
-    	<h1><%= title_from_path() %></h1>
+		<div class="header"><h1><%= title_from_path() %></h1></div>
 		<div class="children"><ul>
 			<% for (children()) { %>
-				<li><%= link_to $_->[0], $_->[1] %></li>
+				<li><%= link_to $_->[0], "/$_->[1]" %></li>
 			<% } %>
 		</ul></div>
-		<div class="path">
-			<% for (path_links()) { %>
-				/ <%= link_to $_->[0], $_->[1] %>
-			<% } %>
+		<div class="content_block">
+			<div class="path_links">
+				<% for (path_links()) { %>
+					/ <%= link_to $_->[0], $_->[1] %>
+				<% } %>
+			</div>
+			<%= content %>
 		</div>
-		<div class="content_block"><%= content %></div>
   </body>
 </html>
