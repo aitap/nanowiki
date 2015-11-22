@@ -1,0 +1,21 @@
++ SQL:
+ + create table
+ + create index
+ + select
+ + insert
++ templates
+ + show page
+ + edit page
+ + default layout
+  + path to current page
+- routers
+ - get router
+  - page history
+ + post router
+  + CSRF
+  + CAPTCHA
+   + 2 + 2 * 2
+- style
+- special CAPTCHA
+ - тест по русскому
+ - ТМ
