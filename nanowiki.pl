@@ -100,8 +100,12 @@ helper 'whois' => sub {
 helper 'path_links' => sub { # transform /A/B/C into series of links to /A, /A/B, /A/B/C
 	my $c = shift;
 	my $path = $c->stash("path");
+	# multiple /s mean nothing
+	$path =~ s{/{2,}}{/}g;
 	# process ../ in path
 	$path =~ s{[^/]*/\.\./}{}g;
+	# / in the end should also be sanitized
+	$path =~ s{/$}{};
 	# split path into parts to linkify them in the template
 	my @pathspec = map { [ $_ ] } split /\//, $path;
 	$pathspec[0][1] = "/$pathspec[0][0]";
@@ -206,7 +210,6 @@ get '/*path' => sub {
 		$dbh
 			->query('select html, src from pages where title = ? order by time desc limit 1', $path)
 			->into(my($html, $src));
-		# TODO: check for valid session and show captcha
 		return $c->render('edit', html => $html, src => $src);
 	} elsif (defined($rev)) {
 		# list revisions or select a specific one
