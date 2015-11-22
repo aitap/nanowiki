@@ -208,7 +208,7 @@ get '/*path' => sub {
 	my $dbh = dbh;
 	if ($edit) { # show edit form
 		$dbh
-			->query('select html, src, from pages where title = ? order by time desc limit 1', $path)
+			->query('select html, src from pages where title = ? order by time desc limit 1', $path)
 			->into(my($html, $src));
 		return $c->render('edit', html => $html, src => $src);
 	} elsif (defined($rev)) {
