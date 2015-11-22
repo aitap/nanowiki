@@ -224,6 +224,33 @@ get '/*path' => sub {
 	}
 } => 'page';
 
+sub process_wiki_links {
+	use Mojo::Util qw(url_escape xml_escape);
+	my ($path, $src) = @_;
+	$src =~ s{ # giant regular expressions! shock, horrors!
+		\[\[   # wikilink begins with [[
+		([^|\]]+) # required part (page name) with no ] or | inside allowed
+		(?:    # optional part: |link_text
+		 \|
+		 ([^\]]+)
+		)?
+		\]\]
+	}{
+		my ($href, $text) = ($1, $2);
+		'<a href="'.url_escape(
+			  ($href =~ m[^/]) ? $href # absolute link
+			: ($href =~ m[^\.\.\/]) ? "/" # sibling link
+				. ($path =~ m[(.*/)[^/]+$])[0]
+				. ($href =~ m[^\.\.\/(.*)])[0]
+			: "/$path/$href" # child link
+		,'^A-Za-z0-9\-._~/') # keep / as safe character
+		.'">'.xml_escape(
+			$text || ($href =~ m[([^/]+)$])[0]
+		).'</a>';
+	}gxe;
+	return $src;
+}
+
 post '/*path' => sub {
 	my $c = shift;
 	my $path = $c->stash("path");
@@ -235,8 +262,7 @@ post '/*path' => sub {
 	(my $parent = $path) =~ s{/[^/]+$}{};
 	my $preview = $c->param("preview");
 	my $exit = $c->param("exit");
-	my $html = textile($src);
-	# my $html = wikiformat($src, {}, {prefix=>"$parent/"}); # no automatical treeifying for now
+	my $html = textile(process_wiki_links($path,$src));
 	my $dbh = dbh;
 	dbh->insert('pages', { title => $path, who => $c->whois, src => $src, html => $html, time => time, parent => $parent })
 		unless $preview;
@@ -280,7 +306,7 @@ __DATA__
 	<input type="submit" name="preview" value="Preview (without saving)">
 	<input type="submit" name="exit" value="Save & exit">
 	<input type="submit" value="Save & continue editing"><br>
-	For more info on the markup used see <a href="http://txstyle.org/">Textile</a>.
+	Available syntax: <a href="http://www.w3.org/MarkUp/Guide/">HTML</a>, <a href="http://txstyle.org/">Textile</a>. Use the following style to link to other pages: <pre>[[Child Page Name]], [[/Full/Path/To/Page]], [[../Sibling Page Name]], [[Page Name|Link Text]]</pre>.
 </form>
 
 @@ layouts/default.html.ep
