@@ -208,7 +208,7 @@ get '/*path' => sub {
 	my $dbh = dbh;
 	if ($edit) { # show edit form
 		$dbh
-			->query('select html, src from pages where title = ? order by time desc limit 1', $path)
+			->query('select html, src, from pages where title = ? order by time desc limit 1', $path)
 			->into(my($html, $src));
 		return $c->render('edit', html => $html, src => $src);
 	} elsif (defined($rev)) {
@@ -219,7 +219,7 @@ get '/*path' => sub {
 			->query('select who, html, time from pages where title = ? order by time desc limit 1', $path)
 			->into(my($who, $html, $time))
 			or return $c->render('edit', msg => 'Page not found, create one now?', src => '', html => '');
-		return $c->render('page', html => $html);
+		return $c->render('page', html => $html, who => $who, time => $time);
 	}
 } => 'page';
 
@@ -253,7 +253,12 @@ __DATA__
 	<p class="history"><!-- TODO --></p>
 <% } %>
 <div class="content"><%== $html %></div>
-<div class="footer"><a href="?edit">Edit</a> <!--<a href="?rev">History</a>--></div>
+<div class="footer">
+	<a href="?edit">Edit</a> <!--<a href="?rev">History</a>-->
+	<% if (my $who = $self->stash("who") and my $time = $self->stash("time")) { %>
+		Revision <%= $time %> by <i><%= $who %></i>.
+	<% } %>
+</div>
 
 @@ edit.html.ep
 % layout 'default';
