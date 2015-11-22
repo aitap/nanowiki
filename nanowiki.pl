@@ -78,7 +78,7 @@ use Mojolicious::Lite;
 use DBIx::Simple;
 use Session::Token;
 use Config::Tiny;
-use Text::MediawikiFormat 'wikiformat';
+use Text::Textile 'textile';
 
 my $conffile = $ENV{NANOWIKI_CONFIG} // "nanowiki.ini";
 my $config = Config::Tiny::->read($conffile, "utf8") || Config::Tiny::->new;
@@ -234,7 +234,7 @@ post '/*path' => sub {
 	(my $parent = $path) =~ s{/[^/]+$}{};
 	my $preview = $c->param("preview");
 	my $exit = $c->param("exit");
-	my $html = wikiformat($src, {}, {});
+	my $html = textile($src);
 	# my $html = wikiformat($src, {}, {prefix=>"$parent/"}); # no automatical treeifying for now
 	my $dbh = dbh;
 	dbh->insert('pages', { title => $path, who => $c->whois, src => $src, html => $html, time => time, parent => $parent })
