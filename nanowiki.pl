@@ -33,6 +33,7 @@ sub run {
 				$_->{secret} //= Session::Token::->new(entropy => 2048)->get;
 				$_->{root_page} //= "Welcome";
 				$_->{session_timeout} //= 60*60*24*7; # sessions expire if not used in one week
+				$_->{session_cleanup_probability} //= .05;
 			}
 			$cnf->write($conffile, "utf8");
 			my $dbh = DBI::->connect(
@@ -155,6 +156,8 @@ helper check_human => sub { # to be used in edit.htm and post controller
 	my $c = shift;
 	my $id = $c->session('id');
 	my $dbh = dbh();
+	# i'm too reluctant to try to implement a cron-like something
+	$dbh->query('delete from sessions where expires < (0+?)',time) if rand() < $config->{_}{session_cleanup_probability};
 	if ( $id
 		&& $dbh
 			->query('select human, expires, challenge, answer from sessions where id = ? and expires > (0+?)',$id,time)
