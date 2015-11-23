@@ -60,12 +60,13 @@ sub run {
 	challenge text, -- some CAPTCHAs may want to know [part of] the question before checking answer
 	answer text
 );",
-"create index if not exists sessions_id on sessions (id);",
+"create index if not exists sessions_id on sessions (id);", # update valid sessions and delete invalid ones
+"create index if not exists sessions_id_expires on sessions (id, expires);", # look up whether a session is valid
+"create index if not exists sessions_expires on sessions (expires);", # clean up stale sessions
 			);
 		},
 		prune_history => sub {
 			...;
-			# should prune history AND cleanup expired sessions, just in case
 		}
 	);
 	unless (@args == 1 and exists $commands{$args[0]}) {
