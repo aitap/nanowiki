@@ -243,7 +243,7 @@ sub process_wiki_links {
 				. ($path =~ m[(.*/)[^/]+$])[0]
 				. ($href =~ m[^\.\.\/(.*)])[0]
 			: "/$path/$href" # child link
-		,'^A-Za-z0-9\-._~/') # keep / as safe character
+		, q{<>&'"}) # URLencode only XML-unsafe characters
 		.'">'.xml_escape(
 			$text || ($href =~ m[([^/]+)$])[0]
 		).'</a>';
