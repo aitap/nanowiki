@@ -15,8 +15,16 @@
   + CSRF
   + CAPTCHA
    + 2 + 2 * 2
+    - use WHAT? (pictures? zalgo text?) instead of math fonts
 + style
++ proper tree-style wiki-links
+- normalize paths before searching
+ - write a normalizing helper
+- admincmds
+ - prune history
+ - delete page
+ - clean sessions
 - special CAPTCHA
  - тест по русскому
  - ТМ
-+ proper tree-style wiki-links
+- CPANify
