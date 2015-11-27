@@ -164,10 +164,11 @@ helper check_human => sub { # to be used in edit.htm and post controller
 			->query('select human, expires, challenge, answer from sessions where id = ? and expires > (0+?)',$id,time)
 			->into(my($human, $expires, $challenge, $answer))
 	) { # session has a somewhat valid id
-		if (!$human and my $to_check = $c->param('captcha')) { # just entered a captcha
-			if (check_captcha($challenge, $answer, $to_check)) { # valid answer
+		if (!$human) { # there is a valid captcha session, but not a human session => must be an answer
+			my $to_check = $c->param('captcha');
+			if (defined $to_check and check_captcha($challenge, $answer, $to_check)) { # valid answer
 				$human = 1;
-			} else {
+			} else { # no answer or invalid
 				$dbh->delete('sessions',{id=>$id}); # delete the session so it won't be used again
 			}
 		}
