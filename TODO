@@ -23,4 +23,6 @@
  - prune history
  - delete page
  - clean sessions
+- remove indices which double implicit ones
+ : "Implicit indexes are indexes that are automatically created by the database server when an object is created. Indexes are automatically created for primary key constraints and unique constraints."
 - CPANify
