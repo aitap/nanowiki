@@ -8,9 +8,9 @@
  + edit page
  + default layout
   + path to current page
-- routers
- - get router
-  - page history
++ routers
+ + get router
+  + page history
  + post router
   + CSRF
   + CAPTCHA
