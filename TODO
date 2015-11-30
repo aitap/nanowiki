@@ -17,6 +17,7 @@
    + 2 + 2 * 2
     - use WHAT? (pictures? zalgo text?) instead of math fonts
 + style
+ - text-align: justify
 + proper tree-style wiki-links
 - normalize paths before searching
  - write a normalizing helper
