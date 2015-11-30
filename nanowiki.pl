@@ -326,7 +326,7 @@ __DATA__
 	<input type="submit" name="preview" value="Preview (without saving)">
 	<input type="submit" name="exit" value="Save & exit">
 	<input type="submit" value="Save & continue editing"><br>
-	Available syntax: <a href="http://www.w3.org/MarkUp/Guide/">HTML</a>, <a href="http://txstyle.org/">Textile</a>. Use the following style to link to other pages: <pre>[[Child Page Name]], [[/Full/Path/To/Page]], [[../Sibling Page Name]], [[Page Name|Link Text]]</pre>.
+	Available syntax: <a href="http://www.w3.org/MarkUp/Guide/">HTML</a>, <a href="http://txstyle.org/">Textile</a>. Use the following style to link to other pages: <pre>[[Child Page Name]], [[/Full/Path/To/Page]], [[../Sibling Page Name]], [[Page Name|Link Text]]</pre>
 </form>
 
 @@ history.html.ep
@@ -356,14 +356,14 @@ __DATA__
 				text-align: center;
 			}
 			.children {
-				float: left;
+				float: right;
 				width: 18%;
 				background-color: #eeeeee;
 				margin: 10px;
 				border-radius: 5px;
 			}
 			.content_block {
-				margin-left: 20%;
+				text-align: justify;
 			}
 			.path_links, .footer {
 				border: 1px solid black;

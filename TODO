@@ -16,7 +16,6 @@
   + CAPTCHA
    + 2 + 2 * 2
 + style
- - text-align: justify
 + proper tree-style wiki-links
 - normalize paths before searching
  - write a normalizing helper
