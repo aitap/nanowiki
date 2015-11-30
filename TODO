@@ -8,14 +8,13 @@
  + edit page
  + default layout
   + path to current page
-- routers
- - get router
-  - page history
++ routers
+ + get router
+  + page history
  + post router
   + CSRF
   + CAPTCHA
    + 2 + 2 * 2
-    - use WHAT? (pictures? zalgo text?) instead of math fonts
 + style
  - text-align: justify
 + proper tree-style wiki-links
@@ -25,7 +24,6 @@
  - prune history
  - delete page
  - clean sessions
-- special CAPTCHA
- - тест по русскому
- - ТМ
+- remove indices which double implicit ones
+ : "Implicit indexes are indexes that are automatically created by the database server when an object is created. Indexes are automatically created for primary key constraints and unique constraints."
 - CPANify

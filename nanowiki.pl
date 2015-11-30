@@ -81,6 +81,7 @@ use DBIx::Simple;
 use Session::Token;
 use Config::Tiny;
 use Text::Textile 'textile';
+use Scalar::Util 'looks_like_number';
 
 my $conffile = $ENV{NANOWIKI_CONFIG} // "nanowiki.ini";
 my $config = Config::Tiny::->read($conffile, "utf8") || Config::Tiny::->new;
@@ -148,7 +149,6 @@ sub get_captcha {
 
 sub check_captcha {
 	my ($challenge, $answer, $to_check) = @_;
-	use Scalar::Util 'looks_like_number';
 	$to_check =~ tr/,/./;
 	return (looks_like_number($to_check) and abs($to_check - $answer) <= 1e-2);
 }
@@ -164,10 +164,11 @@ helper check_human => sub { # to be used in edit.htm and post controller
 			->query('select human, expires, challenge, answer from sessions where id = ? and expires > (0+?)',$id,time)
 			->into(my($human, $expires, $challenge, $answer))
 	) { # session has a somewhat valid id
-		if (!$human and my $to_check = $c->param('captcha')) { # just entered a captcha
-			if (check_captcha($challenge, $answer, $to_check)) { # valid answer
+		if (!$human) { # there is a valid captcha session, but not a human session => must be an answer
+			my $to_check = $c->param('captcha');
+			if (defined $to_check and check_captcha($challenge, $answer, $to_check)) { # valid answer
 				$human = 1;
-			} else {
+			} else { # no answer or invalid
 				$dbh->delete('sessions',{id=>$id}); # delete the session so it won't be used again
 			}
 		}
@@ -208,17 +209,34 @@ get '/' => sub {
 get '/*path' => sub {
 	my $c = shift;
 	my $path = $c->stash('path');
-	my $edit = defined($c->param('edit'));
+	my $edit = $c->param('edit');
 	my $rev = $c->param('rev');
 	my $dbh = dbh;
-	if ($edit) { # show edit form
+	if (defined($edit)) { # show edit form
 		$dbh
-			->query('select html, src from pages where title = ? order by time desc limit 1', $path)
-			->into(my($html, $src));
+			->query(
+				$edit ? 'select html, src from pages where title = ? and time = (0+?) order by time desc limit 1'
+				      : 'select html, src from pages where title = ? order by time desc limit 1',
+				$path,
+				$edit || ()
+			)->into(my($html, $src));
 		return $c->render('edit', html => $html, src => $src);
 	} elsif (defined($rev)) {
 		# list revisions or select a specific one
-		...; # TODO
+		if ($rev and looks_like_number($rev)) { # 0 and '' are not valid revisions
+			$dbh
+				->query('select who, html from pages where title = ? and time = (0+?)', $path, $rev)
+				->into(my($who, $html))
+				or return $c->render('edit', msg => 'Invalid revision number', src => '', html => '');
+			return $c->render('page', html => $html, who => $who, time => $rev);
+		} else { # asked for list of revisions
+			my @history = $dbh
+				->select('pages', [qw/time who/], { title => $path }, { -desc => 'time' })
+				->arrays;
+			return $c->render('edit', msg => 'Page not found', src => '', html => '')
+				unless @history;
+			return $c->render('history', history => \@history);
+		}
 	} else { # just plain view last revision
 		$dbh
 			->query('select who, html, time from pages where title = ? order by time desc limit 1', $path)
@@ -268,9 +286,11 @@ post '/*path' => sub {
 	my $exit = $c->param("exit");
 	my $html = textile(process_wiki_links($path,$src));
 	my $dbh = dbh;
-	dbh->insert('pages', { title => $path, who => $c->whois, src => $src, html => $html, time => time, parent => $parent })
+	my $time = time;
+	my $who = $c->whois;
+	dbh->insert('pages', { title => $path, who => $who, src => $src, html => $html, time => $time, parent => $parent })
 		unless $preview;
-	return $c->render($exit ? 'page' : 'edit', html => $html, src => $src);
+	return $c->render($exit ? 'page' : 'edit', html => $html, src => $src, who => $who, time => $time);
 } => 'post';
 
 push @{app->commands->namespaces}, __PACKAGE__;
@@ -280,15 +300,11 @@ __DATA__
 
 @@ page.html.ep
 % layout 'default';
-<% if (my $revisions = $self->stash("history")) { %>
-	<p class="history"><!-- TODO --></p>
-<% } %>
+% use POSIX 'strftime';
 <div class="content"><%== $html %></div>
 <div class="footer">
-	<a href="?edit">Edit</a> <!--<a href="?rev">History</a>-->
-	<% if (my $who = $self->stash("who") and my $time = $self->stash("time")) { %>
-		Revision <%= $time %> by <i><%= $who %></i>.
-	<% } %>
+	<a href="?edit=<%= $time %>">Edit</a>
+	Revision <a href="?rev"><%= strftime "%Y-%m-%d %H:%M:%S" => localtime $time %></a> by <i><%= $who %></i>.
 </div>
 
 @@ edit.html.ep
@@ -312,6 +328,23 @@ __DATA__
 	<input type="submit" value="Save & continue editing"><br>
 	Available syntax: <a href="http://www.w3.org/MarkUp/Guide/">HTML</a>, <a href="http://txstyle.org/">Textile</a>. Use the following style to link to other pages: <pre>[[Child Page Name]], [[/Full/Path/To/Page]], [[../Sibling Page Name]], [[Page Name|Link Text]]</pre>.
 </form>
+
+@@ history.html.ep
+% layout 'default';
+% use POSIX 'strftime';
+<table>
+<tr>
+	<th>Date&time</th>
+	<th>Author</th>
+	<th>Edit as new</th>
+</tr>
+<% for my $row (@$history) { %>
+	<tr>
+		<td><a href="?rev=<%= $row->[0] %>"><%= strftime "%Y-%m-%d %H:%M:%S" => localtime $row->[0] %></a></td>
+		<td><%= $row->[1] %></td>
+		<td><a href="?edit=<%= $row->[0] %>">[+]</a></td>
+	</tr>
+<% } %>
 
 @@ layouts/default.html.ep
 <!DOCTYPE html>
