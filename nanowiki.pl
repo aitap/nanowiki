@@ -316,7 +316,7 @@ __DATA__
 	%= csrf_field;
 	<div class="edit_container">
 		<div class="textarea">
-			<textarea id="src" name="src" rows=10><%= $src %></textarea>
+			<textarea id="src" name="src" rows=30><%= $src %></textarea>
 		</div>
 		<div class="preview">
 			<%== $html %>
@@ -376,10 +376,11 @@ __DATA__
 			.textarea, .preview {
 				width: 49%;
 				float: left;
+				height: 100%;
 			}
 			textarea {
-				width: 90%;
-				height: auto;
+				width: 95%;
+				height: 100%;
 			}
 			.message {
 				background: #ffeeee;
