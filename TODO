@@ -15,7 +15,8 @@
   + CSRF
   + CAPTCHA
    + 2 + 2 * 2
-+ style
+- style
+ - FIXME: .content_block closes over .children on ?edit
 + proper tree-style wiki-links
 - normalize paths before searching
  - write a normalizing helper

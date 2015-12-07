@@ -364,6 +364,7 @@ __DATA__
 			}
 			.content_block {
 				text-align: justify;
+				margin: 5px;
 			}
 			.path_links, .footer {
 				border: 1px solid black;
