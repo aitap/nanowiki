@@ -335,13 +335,11 @@ __DATA__
 <tr>
 	<th>Date&time</th>
 	<th>Author</th>
-	<th>Edit as new</th>
 </tr>
 <% for my $row (@$history) { %>
 	<tr>
 		<td><a href="?rev=<%= $row->[0] %>"><%= strftime "%Y-%m-%d %H:%M:%S" => localtime $row->[0] %></a></td>
 		<td><%= $row->[1] %></td>
-		<td><a href="?edit=<%= $row->[0] %>">[+]</a></td>
 	</tr>
 <% } %>
 
