@@ -86,6 +86,7 @@ my $conffile = $ENV{NANOWIKI_CONFIG} // "nanowiki.ini";
 my $config = Config::Tiny::->read($conffile, "utf8") || Config::Tiny::->new;
 
 app->secrets([$config->{_}{secret}]);
+app->sessions->default_expiration($config->{_}{session_timeout});
 
 sub dbh {
 	return DBIx::Simple::->connect("dbi:SQLite:dbname=".$config->{_}{sqlite_filename},"","",{sqlite_unicode => 1});
