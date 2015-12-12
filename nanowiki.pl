@@ -21,23 +21,14 @@ sub run {
 	my ($self, @args) = @_;
 	my %commands = (
 		init => sub {
-			# XXX: should I really `use` here?
-			use Config::Tiny;
-			use Session::Token;
-			# FIXME: code duplication, move $conffile to helper?
-			my $conffile = $ENV{NANOWIKI_CONFIG} // "nanowiki.ini";
-			my $cnf = Config::Tiny::->read($conffile, "utf8") || Config::Tiny::->new;
-			for ($cnf->{_}) {
-				$_->{sqlite_filename} //= "nanowiki.db";
-				$_->{session_entropy} //= 128;
-				$_->{secret} //= Session::Token::->new(entropy => 2048)->get;
-				$_->{root_page} //= "Welcome";
-				$_->{session_timeout} //= 60*60*24*7; # sessions expire if not used in one week
-				$_->{session_cleanup_probability} //= .05;
-			}
-			$cnf->write($conffile, "utf8");
+			use Data::Dumper; # shock, horrors! writing config using Dumper!
+			use autodie; # open, print, close
+			my $config = $self->app->config;
+			open my $conf_handle, ">:utf8", $self->app->conffile;
+			print $conf_handle Data::Dumper::->new([$config], ['config'])->Terse(1)->Useqq(1)->Dump;
+			close $conf_handle;
 			my $dbh = DBI::->connect(
-				"dbi:SQLite:dbname=".$cnf->{_}{sqlite_filename},
+				"dbi:SQLite:dbname=".$config->{sqlite_filename},
 				"","",
 				{ RaiseError => 1, sqlite_unicode => 1 },
 			);
@@ -78,18 +69,29 @@ package App::NanoWiki;
 use Mojolicious::Lite;
 use DBIx::Simple;
 use Session::Token;
-use Config::Tiny;
 use Text::Textile 'textile';
 use Scalar::Util 'looks_like_number';
 
-my $conffile = $ENV{NANOWIKI_CONFIG} // "nanowiki.ini";
-my $config = Config::Tiny::->read($conffile, "utf8") || Config::Tiny::->new;
+helper conffile => sub {
+	state $conffile = $ENV{NANOWIKI_CONFIG} // "nanowiki.cnf";
+};
 
-app->secrets([$config->{_}{secret}]);
-app->sessions->default_expiration($config->{_}{session_timeout});
+my $config = plugin Config => {
+	file => app->conffile, default => {
+		sqlite_filename => "nanowiki.db",
+		session_entropy => 128,
+		secret => Session::Token::->new(entropy => 2048)->get,
+		root_page => "Welcome",
+		session_timeout => 60*60*24*7, # sessions expire if not used in one week
+		session_cleanup_probability => .05,
+	}
+};
+
+app->secrets([$config->{secret}]);
+app->sessions->default_expiration($config->{session_timeout});
 
 sub dbh {
-	return DBIx::Simple::->connect("dbi:SQLite:dbname=".$config->{_}{sqlite_filename},"","",{sqlite_unicode => 1});
+	return DBIx::Simple::->connect("dbi:SQLite:dbname=".$config->{sqlite_filename},"","",{sqlite_unicode => 1});
 }
 
 # from Mojolicious::Guides::Tutorial
@@ -158,7 +160,7 @@ helper check_human => sub { # to be used in edit.htm and post controller
 	my $id = $c->session('id');
 	my $dbh = dbh();
 	# i'm too reluctant to try to implement a cron-like something
-	$dbh->query('delete from sessions where expires < (0+?)',time) if rand() < $config->{_}{session_cleanup_probability};
+	$dbh->query('delete from sessions where expires < (0+?)',time) if rand() < $config->{session_cleanup_probability};
 	if ( $id
 		&& $dbh
 			->query('select human, expires, challenge, answer from sessions where id = ? and expires > (0+?)',$id,time)
@@ -173,7 +175,7 @@ helper check_human => sub { # to be used in edit.htm and post controller
 			}
 		}
 		if ($human) { # passed captcha sometime in the past => touch the session in DB and cookies
-			$dbh->update('sessions', { expires => time + $config->{_}{session_timeout}, human => 1 }, { id => $id });
+			$dbh->update('sessions', { expires => time + $config->{session_timeout}, human => 1 }, { id => $id });
 			$c->session(id => $id); # touch session->id to make it last longer; XXX: is it needed?
 			return 1; # confirmed human; free to pass
 		}
@@ -187,12 +189,12 @@ helper captcha_field => sub {
 	# at this point: either the session was valid and there is no captcha, or the session does not exist
 	# even if there was a session ID, there isn't now => captcha_field can feel free to create a new one
 	my $dbh = dbh;
-	my $id = Session::Token::->new(entropy => $config->{_}{session_entropy})->get;
+	my $id = Session::Token::->new(entropy => $config->{session_entropy})->get;
 	my ($challenge, $answer) = get_captcha();
 	$dbh->insert(
 		'sessions',
 		{
-			id => $id, expires => time + $config->{_}{session_timeout},
+			id => $id, expires => time + $config->{session_timeout},
 			challenge => $challenge, answer => $answer,
 		}
 	);
@@ -203,7 +205,7 @@ helper captcha_field => sub {
 # hopefully all pages will be children of the root node
 get '/' => sub {
   my $c = shift;
-  return $c->redirect_to('page', path => $config->{_}{root_page});
+  return $c->redirect_to('page', path => $config->{root_page});
 };
 
 get '/*path' => sub {
