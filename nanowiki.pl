@@ -262,7 +262,7 @@ sub process_wiki_links {
 		'<a href="'.url_escape(
 			  ($href =~ m[^/]) ? $href # absolute link
 			: ($href =~ m[^\.\.\/]) ? "/" # sibling link
-				. ($path =~ m[(.*/)[^/]+$])[0]
+				. (($path =~ m[(.*/)[^/]+$])[0] || '') # empty on root page
 				. ($href =~ m[^\.\.\/(.*)])[0]
 			: "/$path/$href" # child link
 		, q{<>&'"}) # URLencode only XML-unsafe characters

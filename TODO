@@ -1,5 +1,3 @@
-- proper tree-style wiki-links
- - check warning inside regex /e code
 - normalize paths before searching
  - write a normalizing helper
 - admincmds
