@@ -17,7 +17,6 @@ should be used with caution!
 EOM
 
 sub run {
-	use DBI;
 	my ($self, @args) = @_;
 	my %commands = (
 		init => sub {
@@ -27,12 +26,8 @@ sub run {
 			open my $conf_handle, ">:utf8", $self->app->conffile; # still looks ugly?
 			print $conf_handle Data::Dumper::->new([$config], ['config'])->Terse(1)->Useqq(1)->Dump;
 			close $conf_handle;
-			my $dbh = DBI::->connect(
-				"dbi:SQLite:dbname=".$config->{sqlite_filename},
-				"","",
-				{ RaiseError => 1, sqlite_unicode => 1 },
-			);
-			$dbh->do($_) for (
+			my $dbh = $self->app->dbh;
+			$dbh->query($_) for (
 "create table if not exists pages (
 	title text,
 	who text,
@@ -88,9 +83,9 @@ my $config = plugin Config => {
 app->secrets(app->config("secrets"));
 app->sessions->default_expiration($config->{session_timeout});
 
-sub dbh {
+helper 'dbh' => sub {
 	return DBIx::Simple::->connect("dbi:SQLite:dbname=".$config->{sqlite_filename},"","",{sqlite_unicode => 1});
-}
+};
 
 # from Mojolicious::Guides::Tutorial
 helper 'whois' => sub {
@@ -124,7 +119,7 @@ helper 'title_from_path' => sub { # /A/B/C -> C
 
 helper children => sub { # all pages which have current as their parent
 	my $c = shift;
-	my $dbh = dbh;
+	my $dbh = $c->dbh;
 	return
 		map {
 			my ($title) = m{([^/]+)$};
@@ -156,7 +151,7 @@ sub check_captcha {
 helper check_human => sub { # to be used in edit.htm and post controller
 	my $c = shift;
 	my $id = $c->session('id');
-	my $dbh = dbh();
+	my $dbh = $c->dbh();
 	# i'm too reluctant to try to implement a cron-like something
 	$dbh->query('delete from sessions where expires < (0+?)',time) if rand() < $config->{session_cleanup_probability};
 	if ( $id
@@ -186,7 +181,7 @@ helper captcha_field => sub {
 	return "" if $c->check_human;
 	# at this point: either the session was valid and there is no captcha, or the session does not exist
 	# even if there was a session ID, there isn't now => captcha_field can feel free to create a new one
-	my $dbh = dbh;
+	my $dbh = $c->dbh;
 	my $id = Session::Token::->new(entropy => $config->{session_entropy})->get;
 	my ($challenge, $answer) = get_captcha();
 	$dbh->insert(
@@ -211,7 +206,7 @@ get '/*path' => sub {
 	my $path = $c->stash('path');
 	my $edit = $c->param('edit');
 	my $rev = $c->param('rev');
-	my $dbh = dbh;
+	my $dbh = $c->dbh;
 	if (defined($edit)) { # show edit form
 		$dbh
 			->query(
@@ -285,10 +280,9 @@ post '/*path' => sub {
 	my $preview = $c->param("preview");
 	my $exit = $c->param("exit");
 	my $html = textile(process_wiki_links($path,$src));
-	my $dbh = dbh;
 	my $time = time;
 	my $who = $c->whois;
-	dbh->insert('pages', { title => $path, who => $who, src => $src, html => $html, time => $time, parent => $parent })
+	$c->dbh->insert('pages', { title => $path, who => $who, src => $src, html => $html, time => $time, parent => $parent })
 		unless $preview;
 	return $c->render($exit ? 'page' : 'edit', html => $html, src => $src, who => $who, time => $time);
 } => 'post';
