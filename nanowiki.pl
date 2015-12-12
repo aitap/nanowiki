@@ -95,7 +95,7 @@ helper 'whois' => sub {
 	return "$agent ($ip)";
 };
 
-helper 'path_links' => sub { # transform /A/B/C into series of links to /A, /A/B, /A/B/C
+helper 'normalize_path' => sub { # run once per request
 	my $c = shift;
 	my $path = $c->stash("path");
 	# multiple /s mean nothing
@@ -104,6 +104,13 @@ helper 'path_links' => sub { # transform /A/B/C into series of links to /A, /A/B
 	$path =~ s{[^/]*/\.\./}{}g;
 	# / in the end should also be sanitized
 	$path =~ s{/$}{};
+	$c->stash("path" => $path);
+	return $path;
+};
+
+helper 'path_links' => sub { # transform /A/B/C into series of links to /A, /A/B, /A/B/C
+	my $c = shift;
+	my $path = $c->stash("path");
 	# split path into parts to linkify them in the template
 	my @pathspec = map { [ $_ ] } split /\//, $path;
 	$pathspec[0][1] = "/$pathspec[0][0]";
@@ -203,7 +210,7 @@ get '/' => sub {
 
 get '/*path' => sub {
 	my $c = shift;
-	my $path = $c->stash('path');
+	my $path = $c->normalize_path;
 	my $edit = $c->param('edit');
 	my $rev = $c->param('rev');
 	my $dbh = $c->dbh;
@@ -270,7 +277,7 @@ sub process_wiki_links {
 
 post '/*path' => sub {
 	my $c = shift;
-	my $path = $c->stash("path");
+	my $path = $c->normalize_path;
 	my $src = $c->param("src");
 	return $c->render('edit', msg => 'Invalid request (CSRF)', src => $src, html => '')
 		if $c->validation->csrf_protect->has_error;
@@ -297,7 +304,7 @@ __DATA__
 % use POSIX 'strftime';
 <div class="children"><ul>
 	<% for (children()) { %>
-		<li><%= link_to $_->[0], "/$_->[1]" %></li>
+		<li><a href="/<%= $_->[1] %>"><%= $_->[0] %></a></li>
 	<% } %>
 </ul></div>
 <div class="content"><%== $html %></div>
@@ -393,7 +400,7 @@ __DATA__
 		<div class="content_block">
 			<div class="path_links">
 				<% for (path_links()) { %>
-					/ <%= link_to $_->[0], $_->[1] %>
+					/ <a href="<%= $_->[1] %>"><%= $_->[0] %></a>
 				<% } %>
 			</div>
 			<%= content %>

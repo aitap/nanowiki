@@ -1,5 +1,3 @@
-- normalize paths before searching
- - write a normalizing helper
 - admincmds
  - prune history [until=?]
  - delete page
