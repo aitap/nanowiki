@@ -1,5 +1,3 @@
-- style
- - FIXME: .content_block closes over .children on ?edit
 - proper tree-style wiki-links
  - check warning inside regex /e code
 - normalize paths before searching

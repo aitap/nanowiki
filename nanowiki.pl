@@ -301,6 +301,11 @@ __DATA__
 @@ page.html.ep
 % layout 'default';
 % use POSIX 'strftime';
+<div class="children"><ul>
+	<% for (children()) { %>
+		<li><%= link_to $_->[0], "/$_->[1]" %></li>
+	<% } %>
+</ul></div>
 <div class="content"><%== $html %></div>
 <div class="footer">
 	<a href="?edit=<%= $time %>">Edit</a>
@@ -391,11 +396,6 @@ __DATA__
 	</head>
 	<body>
 		<div class="header"><h1><%= title_from_path() %></h1></div>
-		<div class="children"><ul>
-			<% for (children()) { %>
-				<li><%= link_to $_->[0], "/$_->[1]" %></li>
-			<% } %>
-		</ul></div>
 		<div class="content_block">
 			<div class="path_links">
 				<% for (path_links()) { %>
