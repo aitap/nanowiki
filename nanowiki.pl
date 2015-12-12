@@ -3,7 +3,7 @@ package App::NanoWiki::admincmd;
 use Mojo::Base 'Mojolicious::Command';
 has description => 'Administrative commands for NanoWiki';
 has usage => <<EOM;
-Usage: $0 admincmd <defaults|createdb|prune_history>
+Usage: $0 admincmd <defaults|prune_history>
 
 Available commands:
 
@@ -24,7 +24,7 @@ sub run {
 			use Data::Dumper; # shock, horrors! writing config using Dumper!
 			use autodie; # open, print, close
 			my $config = $self->app->config;
-			open my $conf_handle, ">:utf8", $self->app->conffile;
+			open my $conf_handle, ">:utf8", $self->app->conffile; # still looks ugly?
 			print $conf_handle Data::Dumper::->new([$config], ['config'])->Terse(1)->Useqq(1)->Dump;
 			close $conf_handle;
 			my $dbh = DBI::->connect(
@@ -72,22 +72,20 @@ use Session::Token;
 use Text::Textile 'textile';
 use Scalar::Util 'looks_like_number';
 
-helper conffile => sub {
-	state $conffile = $ENV{NANOWIKI_CONFIG} // "nanowiki.cnf";
-};
+app->attr(conffile => $ENV{NANOWIKI_CONFIG} // "nanowiki.cnf"); # to use it from ::command
 
 my $config = plugin Config => {
 	file => app->conffile, default => {
 		sqlite_filename => "nanowiki.db",
 		session_entropy => 128,
-		secret => Session::Token::->new(entropy => 2048)->get,
+		secrets => [Session::Token::->new(entropy => 2048)->get],
 		root_page => "Welcome",
 		session_timeout => 60*60*24*7, # sessions expire if not used in one week
 		session_cleanup_probability => .05,
 	}
 };
 
-app->secrets([$config->{secret}]);
+app->secrets(app->config("secrets"));
 app->sessions->default_expiration($config->{session_timeout});
 
 sub dbh {
