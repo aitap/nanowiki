@@ -289,8 +289,10 @@ post '/*path' => sub {
 	my $html = textile(process_wiki_links($path,$src));
 	my $time = time;
 	my $who = $c->whois;
-	$c->dbh->insert('pages', { title => $path, who => $who, src => $src, html => $html, time => $time, parent => $parent })
-		unless $preview;
+	unless ($preview) {
+		$c->dbh->insert('pages', { title => $path, who => $who, src => $src, html => $html, time => $time, parent => $parent })
+			or return $c->render('edit', html => $html, src => $src, who => $who, time => $time, msg => "Database returned error, please retry");
+	}
 	return $c->render($exit ? 'page' : 'edit', html => $html, src => $src, who => $who, time => $time);
 } => 'post';
 
