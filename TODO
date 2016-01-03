@@ -1,3 +1,6 @@
+- controllers
+ - use HTTP error codes 404/403/500 for specific conditions
+ - use post-redirect-get pattern
 - admincmds
  - prune history [until=?]
  - delete page
