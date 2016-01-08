@@ -1,3 +1,4 @@
+- a href: investigate uri_escape vs uri_escape_utf8 - latter does the right thing?
 - controllers
  - use HTTP error codes 404/403/500 for specific conditions
  - use post-redirect-get pattern
