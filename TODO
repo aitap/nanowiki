@@ -9,3 +9,4 @@
  - dump into single HTML page
   - special link handling => repurpose existing code
 - CPANify
+- app->config(defaults => ...) wastes 2048 bits of random data every launch :(
