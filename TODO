@@ -1,4 +1,5 @@
 - a href: investigate uri_escape vs uri_escape_utf8 - latter does the right thing?
+ - fix urlencoding in links: `links2` asks the server for literal utf8 unstead of urlencoded and fails
 - controllers
  - use HTTP error codes 404/403/500 for specific conditions
  - use post-redirect-get pattern
