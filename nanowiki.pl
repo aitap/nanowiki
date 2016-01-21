@@ -249,7 +249,7 @@ get '/*path' => sub {
 } => 'page';
 
 sub process_wiki_links {
-	use Mojo::Util qw(url_escape xml_escape);
+	use Mojo::Util qw(xml_escape);
 	my ($path, $src) = @_;
 	$src =~ s{ # giant regular expressions! shock, horrors!
 		\[\[   # wikilink begins with [[
@@ -261,13 +261,13 @@ sub process_wiki_links {
 		\]\]
 	}{
 		my ($href, $text) = ($1, $2);
-		'<a href="'.url_escape(
+		'<a href="'.Mojo::URL::->new(
 			  ($href =~ m[^/]) ? $href # absolute link
 			: ($href =~ m[^\.\.\/]) ? "/" # sibling link
 				. (($path =~ m[(.*/)[^/]+$])[0] || '') # empty on root page
 				. ($href =~ m[^\.\.\/(.*)])[0]
 			: "/$path/$href" # child link
-		, q{<>&'"}) # URLencode only XML-unsafe characters
+		)
 		.'">'.xml_escape(
 			$text || ($href =~ m[([^/]+)$])[0]
 		).'</a>';
