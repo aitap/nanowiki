@@ -309,7 +309,7 @@ __DATA__
 % use POSIX 'strftime';
 <div class="children"><ul>
 	<% for (children()) { %>
-		<li><a href="/<%= $_->[1] %>"><%= $_->[0] %></a></li>
+		<li><a href="/<%= url_for $_->[1] %>"><%= $_->[0] %></a></li>
 	<% } %>
 </ul></div>
 <div class="content"><%== $html %></div>
@@ -405,7 +405,7 @@ __DATA__
 		<div class="content_block">
 			<div class="path_links">
 				<% for (path_links()) { %>
-					/ <a href="<%= $_->[1] %>"><%= $_->[0] %></a>
+					/ <a href="<%= url_for $_->[1] %>"><%= $_->[0] %></a>
 				<% } %>
 			</div>
 			<%= content %>
