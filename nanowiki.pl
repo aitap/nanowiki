@@ -229,13 +229,13 @@ get '/*path' => sub {
 			$dbh
 				->query('select who, html from pages where title = ? and time = (0+?)', $path, $rev)
 				->into(my($who, $html))
-				or return $c->render('edit', msg => 'Invalid revision number', src => '', html => '');
+				or return $c->render('edit', msg => 'Invalid revision number', src => '', html => '', status => 404);
 			return $c->render('page', html => $html, who => $who, time => $rev);
 		} else { # asked for list of revisions
 			my @history = $dbh
 				->select('pages', [qw/time who/], { title => $path }, { -desc => 'time' })
 				->arrays;
-			return $c->render('edit', msg => 'Page not found', src => '', html => '')
+			return $c->render('edit', msg => 'Page not found', src => '', html => '', status => 404)
 				unless @history;
 			return $c->render('history', history => \@history);
 		}
@@ -243,7 +243,7 @@ get '/*path' => sub {
 		$dbh
 			->query('select who, html, time from pages where title = ? order by time desc limit 1', $path)
 			->into(my($who, $html, $time))
-			or return $c->render('edit', msg => 'Page not found, create one now?', src => '', html => '');
+			or return $c->render('edit', msg => 'Page not found, create one now?', src => '', html => '', status => 404);
 		return $c->render('page', html => $html, who => $who, time => $time);
 	}
 } => 'page';
@@ -279,9 +279,9 @@ post '/*path' => sub {
 	my $c = shift;
 	my $path = $c->normalize_path;
 	my $src = $c->param("src");
-	return $c->render('edit', msg => 'Invalid request (CSRF)', src => $src, html => '')
+	return $c->render('edit', msg => 'Invalid request (CSRF)', src => $src, html => '', status => 403)
 		if $c->validation->csrf_protect->has_error;
-	return $c->render('edit', msg => 'Invadid CAPTCHA', src => $src, html => '')
+	return $c->render('edit', msg => 'Invadid CAPTCHA', src => $src, html => '', status => 403)
 		unless $c->check_human;
 	(my $parent = $path) =~ s{/[^/]+$}{};
 	my $preview = $c->param("preview");
@@ -291,7 +291,7 @@ post '/*path' => sub {
 	my $who = $c->whois;
 	unless ($preview) {
 		$c->dbh->insert('pages', { title => $path, who => $who, src => $src, html => $html, time => $time, parent => $parent })
-			or return $c->render('edit', html => $html, src => $src, who => $who, time => $time, msg => "Database returned error, please retry");
+			or return $c->render('edit', html => $html, src => $src, who => $who, time => $time, msg => "Database returned error, please retry", status => 500);
 	}
 	return $c->render($exit ? 'page' : 'edit', html => $html, src => $src, who => $who, time => $time);
 } => 'post';
