@@ -11,6 +11,13 @@ init
 	Write default config file, create the database file and tables
 prune_history
 	Delete all the revisions of all pages except the latest ones
+delete <page> [page ...]
+	Delete specified pages completely
+rename <from> <to>
+	Move a page from one path to another. Ordinary paths look like
+	"Welcome/subpage/subsubpage".
+dump
+	Export all pages as one giant HTML of latest revisions.
 
 Warning: the commands in question are potentially destructive and
 should be used with caution!
@@ -18,6 +25,7 @@ EOM
 
 sub run {
 	my ($self, @args) = @_;
+	use Mojo::Util 'decode';
 	my %commands = (
 		init => sub {
 			use Data::Dumper; # shock, horrors! writing config using Dumper!
@@ -52,12 +60,26 @@ sub run {
 		},
 		prune_history => sub {
 			...;
-		}
+		},
+		delete => sub {
+			return unless @_; # delete from pages; -- haha
+			say "Deleted ".$self->app->dbh->delete('pages', { title => { '=' , [ map { decode utf8 => $_ } @_ ] } })->rows." rows";
+		},
+		rename => sub {
+			die "Usage: rename <from> <to>\n" unless @_ == 2;
+			my ($from, $to) = map { decode utf8 => $_ } @_;
+			say "Updated "
+				.$self->app->dbh->update('pages', { title => $to }, { title => $from })->rows
+				." rows";
+		},
+		dump => sub {
+			...;
+		},
 	);
-	unless (@args == 1 and exists $commands{$args[0]}) {
+	unless (@args and exists $commands{$args[0]}) {
 		$self->help; exit(1);
 	}
-	$commands{$args[0]}->();
+	$commands{$args[0]}->(@args[1..$#args]);
 }
 
 package App::NanoWiki;
