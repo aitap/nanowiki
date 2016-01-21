@@ -289,10 +289,13 @@ post '/*path' => sub {
 	my $html = textile(process_wiki_links($path,$src));
 	my $time = time;
 	my $who = $c->whois;
-	unless ($preview) {
-		$c->dbh->insert('pages', { title => $path, who => $who, src => $src, html => $html, time => $time, parent => $parent })
-			or return $c->render('edit', html => $html, src => $src, who => $who, time => $time, msg => "Database returned error, please retry", status => 500);
+	if ($preview) { # no save, no redirect
+		return $c->render('edit', html => $html, src => $src, msg => "Preview mode");
 	}
+	# else save the data and decide where to redirect
+	$c->dbh->insert('pages', { title => $path, who => $who, src => $src, html => $html, time => $time, parent => $parent })
+		or return $c->render('edit', html => $html, src => $src, who => $who, time => $time, msg => "Database returned error, please retry", status => 500);
+	return $c->redirect_to($c->url_for("/$path")->query($exit ? 'rev' : 'edit', $time));
 	return $c->render($exit ? 'page' : 'edit', html => $html, src => $src, who => $who, time => $time);
 } => 'post';
 

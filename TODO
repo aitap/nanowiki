@@ -1,6 +1,4 @@
 - a href: investigate uri_escape vs uri_escape_utf8 - latter does the right thing?
-- controllers
- - use post-redirect-get pattern
 - admincmds
  - prune history [until=?]
  - delete page
