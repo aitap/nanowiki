@@ -63,7 +63,9 @@ sub run {
 		},
 		delete => sub {
 			return unless @_; # delete from pages; -- haha
-			say "Deleted ".$self->app->dbh->delete('pages', { title => { '=' , [ map { decode utf8 => $_ } @_ ] } })->rows." rows";
+			say "Deleted "
+				.$self->app->dbh->delete('pages', { title => { '=' , [ map { decode utf8 => $_ } @_ ] } })->rows
+				." rows";
 		},
 		rename => sub {
 			die "Usage: rename <from> <to>\n" unless @_ == 2;
@@ -319,7 +321,6 @@ post '/*path' => sub {
 	$c->dbh->insert('pages', { title => $path, who => $who, src => $src, html => $html, time => $time, parent => $parent })
 		or return $c->render('edit', html => $html, src => $src, who => $who, time => $time, msg => "Database returned error, please retry", status => 500);
 	return $c->redirect_to($c->url_for("/$path")->query($exit ? 'rev' : 'edit', $time));
-	return $c->render($exit ? 'page' : 'edit', html => $html, src => $src, who => $who, time => $time);
 } => 'post';
 
 push @{app->commands->namespaces}, __PACKAGE__;
