@@ -1,8 +1,11 @@
 - admincmds
+ - export to tree of *txt and import from it
+  - consult mtime to determine whether an update is needed and notify of conflicts, if any
  - prune history [until=?]
  - delete page
  - rename page [fix links?]
  - dump into single HTML page
   - special link handling => repurpose existing code
+- conflict detection: compare param("edit") (revision being edited) with mtime of last revision and suggest merging
 - CPANify
 - app->config(defaults => ...) wastes 2048 bits of random data every launch :(
