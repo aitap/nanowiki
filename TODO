@@ -7,5 +7,6 @@
  - dump into single HTML page
   - special link handling => repurpose existing code
 - conflict detection: compare param("edit") (revision being edited) with mtime of last revision and suggest merging
+- employ FTS to search the wiki
 - CPANify
 - app->config(defaults => ...) wastes 2048 bits of random data every launch :(
