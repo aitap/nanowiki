@@ -103,18 +103,24 @@ sub run {
 				# we only care about *.txt files
 				return unless -f $found and $found =~ /\.txt$/;
 				open my $read, "<:utf8:crlf", $found;
-				$found =~ s{^\Q$dir\E/}{}; $found =~ s/\.txt$//;
+				$found =~ s{^\Q$dir\E/}{}; $found =~ s/\.txt$//; $found = decode utf8 => $found;
 				my $time = (scalar(<$read>) =~ /^(\d+)\s*#.*$/)[0];
 				die "Can't read mtime of $File::Find::name; was the first line damaged?\n" unless $time;
 				if (($dbh->query("select count(time) from pages where time > (?+0) and title = ?",$time, $found)->flat)[0]) {
-					# there were updates
-					warn "Not importing $found because there are newer edits\n";
+					warn "$time $File::Find::name -- not importing because there are newer edits\n";
 					return;
 				}
-				# $dbh->insert("pages",{
-				# FIXME: appropriate HTML processing has to be available to the command
-				...;
-				print "$time $found\n";
+				my $src = do { local $/; <$read> };
+				if (($dbh->query("select count(time) from pages where time = (?+0) and src = ? and title = ?", $time, $src, $found)->flat)[0]) {
+					print "$time $File::Find::name -- unchanged\n";
+					return;
+				}
+				(my $parent = $found) =~ s{/[^/]+$}{}; # FIXME: this is copy-paste code
+				$dbh->insert("pages", {
+					title => $found, who => "local import", src => $src,
+					html => App::NanoWiki::process_source($found,$src), time => time(), parent => $parent
+				});
+				print "$time $File::Find::name\n";
 			}, no_chdir => 1}, $dir);
 		},
 		dump => sub {
