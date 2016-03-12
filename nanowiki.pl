@@ -3,21 +3,20 @@ package App::NanoWiki::admincmd;
 use Mojo::Base 'Mojolicious::Command';
 has description => 'Administrative commands for NanoWiki';
 has usage => <<EOM;
-Usage: $0 admincmd <defaults|prune_history>
+Usage: $0 admincmd <command> [arguments...]
 
 Available commands:
 
 init
 	Write default config file, create the database file and tables
-prune_history
-	Delete all the revisions of all pages except the latest ones
 delete <page> [page ...]
 	Delete specified pages completely
 rename <from> <to>
 	Move a page from one path to another. Ordinary paths look like
 	"Welcome/subpage/subsubpage".
-dump
-	Export all pages as one giant HTML of latest revisions.
+export <directory>
+	Export the wiki as a series of text files containing Textile
+	source of the articles to the specified directory.
 
 Warning: the commands in question are potentially destructive and
 should be used with caution!
@@ -25,7 +24,7 @@ EOM
 
 sub run {
 	my ($self, @args) = @_;
-	use Mojo::Util 'decode';
+	use Mojo::Util qw(encode decode);
 	my %commands = (
 		init => sub {
 			use Data::Dumper; # shock, horrors! writing config using Dumper!
@@ -58,9 +57,6 @@ sub run {
 "create index if not exists sessions_expires on sessions (expires);", # clean up stale sessions
 			);
 		},
-		prune_history => sub {
-			...;
-		},
 		delete => sub {
 			return unless @_; # delete from pages; -- haha
 			say "Deleted "
@@ -75,7 +71,31 @@ sub run {
 				.$self->app->dbh->update('pages', { title => $to, parent => $parent }, { title => $from })->rows
 				." rows";
 		},
+		export => sub {
+			use autodie; # chdir, open, close, print...
+			use File::Path 'make_path';
+			die "Usage: export <directory>\n" unless @_ == 1;
+			my $dbh = $self->app->dbh; # it dies and takes the sth with it otherwise
+			my $result = $dbh->query(
+				"select p.title, p.src, p.time from pages p
+				inner join (select title, max(time) as latest from pages group by title) gp
+				on gp.title == p.title and p.time == gp.latest"
+			);
+			while (my $row = $result->array) {
+				my ($title, $text, $time) = @$row;
+				$title = encode utf8 => "$_[0]/$title.txt";
+				(my $dirname = $title) =~ s{/[^/]+$}{};
+				make_path $dirname;
+				open my $write, ">:utf8:crlf", $title;
+				print $write "$time # please don't touch this line\n";
+				print $write $text;
+				print "$time $title\n";
+			}
+		},
 		dump => sub {
+			...;
+		},
+		prune_history => sub {
 			...;
 		},
 	);
