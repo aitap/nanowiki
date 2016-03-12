@@ -2,6 +2,7 @@
  - export to tree of *txt and import from it
   + export
   - compare sources and the stored rev number to determine whether an update is needed and notify of conflicts, if any
+  - this requires HTML processing to be available to ::admincmd package
  - prune history [until=?]
  - delete page
  - rename page [fix links?]
