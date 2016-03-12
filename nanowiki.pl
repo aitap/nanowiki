@@ -318,7 +318,7 @@ get '/*path' => sub {
 	}
 } => 'page';
 
-sub process_wiki_links {
+sub process_source {
 	use Mojo::Util qw(xml_escape);
 	my ($path, $src) = @_;
 	$src =~ s{ # giant regular expressions! shock, horrors!
@@ -342,7 +342,7 @@ sub process_wiki_links {
 			$text || ($href =~ m[([^/]+)$])[0]
 		).'</a>';
 	}gxe;
-	return $src;
+	return textile($src);
 }
 
 post '/*path' => sub {
@@ -356,7 +356,7 @@ post '/*path' => sub {
 	(my $parent = $path) =~ s{/[^/]+$}{};
 	my $preview = $c->param("preview");
 	my $exit = $c->param("exit");
-	my $html = textile(process_wiki_links($path,$src));
+	my $html = process_source($path,$src);
 	my $time = time;
 	my $who = $c->whois;
 	if ($preview) { # no save, no redirect
