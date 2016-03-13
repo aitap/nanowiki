@@ -126,9 +126,6 @@ sub run {
 		dump => sub {
 			...;
 		},
-		prune_history => sub {
-			...;
-		},
 	);
 	unless (@args and exists $commands{$args[0]}) {
 		$self->help; exit(1);

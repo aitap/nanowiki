@@ -1,14 +1,24 @@
+- refactor:
+ - check if database errors are handled properly (RaiseError?)
+ - replace 'parent' copypaste regexp with a helper
+  - maybe create a helper to insert a new page revision? I do it in two places
+  - actually, maybe I need a process_source *helper*?
+ - schema updates
+  - employ pragma user_version to store schema version and write alter table commands to upgrade
+  - 'challenge' field isn't really needed in 'sessions' table
+  - add the primary key (title, time) to 'pages' table already
 - admincmds
  + export to tree of *txt and import from it
   + export
   + compare sources and the stored rev number to determine whether an update is needed and notify of conflicts, if any
   + this requires HTML processing to be available to ::admincmd package
- - prune history [until=?]
- - delete page
- - rename page [fix links?]
+ + delete page
+ + rename page
  - dump into single HTML page
   - special link handling => repurpose existing code
 - conflict detection: compare param("edit") (revision being edited) with mtime of last revision and suggest merging
+ - this will require Algorithm::Diff and a new template
 - employ FTS to search the wiki
+ - this is definitely a major database schema upgrade
 - CPANify
-- app->config(defaults => ...) wastes 2048 bits of random data every launch :(
+- app->config(defaults => ...) wastes 2048 bits of random data on every launch :(
