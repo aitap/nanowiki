@@ -87,7 +87,7 @@ sub run {
 				(my $dirname = $title) =~ s{/[^/]+$}{};
 				make_path $dirname;
 				open my $write, ">:utf8:crlf", $title;
-				print $write "$time # please don't touch this line\n";
+				print $write "$time # revision ".scalar(localtime $time)." -- please do not touch this line\n";
 				print $write $text;
 				print "$time $title\n";
 			}
@@ -104,7 +104,7 @@ sub run {
 				return unless -f $found and $found =~ /\.txt$/;
 				open my $read, "<:utf8:crlf", $found;
 				$found =~ s{^\Q$dir\E/}{}; $found =~ s/\.txt$//; $found = decode utf8 => $found;
-				my $time = (scalar(<$read>) =~ /^(\d+)\s*#.*$/)[0];
+				my $time = (scalar(<$read>) =~ /^\s*(\d+)/)[0];
 				die "Can't read mtime of $File::Find::name; was the first line damaged?\n" unless $time;
 				if (($dbh->query("select count(time) from pages where time > (?+0) and title = ?",$time, $found)->flat)[0]) {
 					warn "$time $File::Find::name -- not importing because there are newer edits\n";
