@@ -50,7 +50,6 @@ sub run {
 	id text primary key, -- from Session::Token
 	human bool,
 	expires integer,
-	challenge text, -- some CAPTCHAs may want to know [part of] the question before checking answer
 	answer text
 );",
 "create index if not exists sessions_id_expires on sessions (id, expires);", # look up whether a session is valid
@@ -155,6 +154,8 @@ my $config = plugin Config => {
 
 app->secrets(app->config("secrets"));
 app->sessions->default_expiration($config->{session_timeout});
+$config->{get_captcha} ||= \&get_captcha;
+$config->{check_captcha} ||= \&check_captcha;
 
 helper 'dbh' => sub {
 	return DBIx::Simple::->connect("dbi:SQLite:dbname=".$config->{sqlite_filename},"","",{sqlite_unicode => 1});
@@ -223,7 +224,7 @@ sub get_captcha {
 }
 
 sub check_captcha {
-	my ($challenge, $answer, $to_check) = @_;
+	my ($answer, $to_check) = @_;
 	$to_check =~ tr/,/./;
 	return (looks_like_number($to_check) and abs($to_check - $answer) <= 1e-2);
 }
@@ -236,12 +237,12 @@ helper check_human => sub { # to be used in edit.htm and post controller
 	$dbh->query('delete from sessions where expires < (0+?)',time) if rand() < $config->{session_cleanup_probability};
 	if ( $id
 		&& $dbh
-			->query('select human, expires, challenge, answer from sessions where id = ? and expires > (0+?)',$id,time)
-			->into(my($human, $expires, $challenge, $answer))
+			->query('select human, expires, answer from sessions where id = ? and expires > (0+?)',$id,time)
+			->into(my($human, $expires, $answer))
 	) { # session has a somewhat valid id
 		if (!$human) { # there is a valid captcha session, but not a human session => must be an answer
 			my $to_check = $c->param('captcha');
-			if (defined $to_check and check_captcha($challenge, $answer, $to_check)) { # valid answer
+			if (defined $to_check and $config->{check_captcha}($answer, $to_check)) { # valid answer
 				$human = 1;
 			} else { # no answer or invalid
 				$dbh->delete('sessions',{id=>$id}); # delete the session so it won't be used again
@@ -263,12 +264,12 @@ helper captcha_field => sub {
 	# even if there was a session ID, there isn't now => captcha_field can feel free to create a new one
 	my $dbh = $c->dbh;
 	my $id = Session::Token::->new(entropy => $config->{session_entropy})->get;
-	my ($challenge, $answer) = get_captcha();
+	my ($challenge, $answer) = $config->{get_captcha}();
 	$dbh->insert(
 		'sessions',
 		{
 			id => $id, expires => time + $config->{session_timeout},
-			challenge => $challenge, answer => $answer,
+			answer => $answer,
 		}
 	);
 	$c->session(id => $id);
