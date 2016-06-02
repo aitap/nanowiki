@@ -1,3 +1,5 @@
+- move custom captcha_challenge and check_captcha to the config
+ - and get rid of local_customizations
 - refactor:
  - check if database errors are handled properly (RaiseError?)
  - replace 'parent' copypaste regexp with a helper
