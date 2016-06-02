@@ -5,7 +5,6 @@
   - actually, maybe I need a process_source *helper*?
  - schema updates
   - employ pragma user_version to store schema version and write alter table commands to upgrade
-  - 'challenge' field isn't really needed in 'sessions' table
   - add the primary key (title, time) to 'pages' table already
 - admincmds
  + export to tree of *txt and import from it
