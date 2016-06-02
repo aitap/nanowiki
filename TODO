@@ -1,6 +1,5 @@
 - refactor:
- - check if database errors are handled properly (RaiseError?)
- - replace 'parent' copypaste regexp with a helper
+ ! replace 'parent' copypaste regexp with a helper
   - maybe create a helper to insert a new page revision? I do it in two places
   - actually, maybe I need a process_source *helper*?
  - schema updates

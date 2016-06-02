@@ -34,7 +34,7 @@ sub run {
 			print $conf_handle Data::Dumper::->new([$config], ['config'])->Terse(1)->Useqq(1)->Dump;
 			close $conf_handle;
 			my $dbh = $self->app->dbh;
-			$dbh->query($_) for (
+			$dbh->query($_) or die $dbh->error for (
 "create table if not exists pages (
 	title text,
 	who text,
@@ -65,7 +65,7 @@ sub run {
 		rename => sub {
 			die "Usage: rename <from> <to>\n" unless @_ == 2;
 			my ($from, $to) = map { decode utf8 => $_ } @_;
-			(my $parent = $to) =~ s{/[^/]+$}{};
+			(my $parent = $to) =~ s{/[^/]+$}{}; # FIXME: parent regexp copy-paste
 			say "Updated "
 				.$self->app->dbh->update('pages', { title => $to, parent => $parent }, { title => $from })->rows
 				." rows";
@@ -79,7 +79,7 @@ sub run {
 				"select p.title, p.src, p.time from pages p
 				inner join (select title, max(time) as latest from pages group by title) gp
 				on gp.title == p.title and p.time == gp.latest"
-			);
+			) or die $dbh->error;
 			while (my $row = $result->array) {
 				my ($title, $text, $time) = @$row;
 				$title = encode utf8 => "$_[0]/$title.txt";
@@ -118,7 +118,7 @@ sub run {
 				$dbh->insert("pages", {
 					title => $found, who => "local import", src => $src,
 					html => App::NanoWiki::process_source($found,$src), time => time(), parent => $parent
-				});
+				}) or die "$time $File::Find::name ".$dbh->error;
 				print "$time $File::Find::name\n";
 			}, no_chdir => 1}, $dir);
 		},
@@ -158,7 +158,11 @@ $config->{get_captcha} ||= \&get_captcha;
 $config->{check_captcha} ||= \&check_captcha;
 
 helper 'dbh' => sub {
-	return DBIx::Simple::->connect("dbi:SQLite:dbname=".$config->{sqlite_filename},"","",{sqlite_unicode => 1});
+	return DBIx::Simple::->connect("dbi:SQLite:dbname=".$config->{sqlite_filename},"","",{
+		sqlite_unicode => 1,
+		AutoCommit => 1,
+		RaiseError => 1,
+	});
 };
 
 # from Mojolicious::Guides::Tutorial
@@ -233,8 +237,11 @@ helper check_human => sub { # to be used in edit.htm and post controller
 	my $c = shift;
 	my $id = $c->session('id');
 	my $dbh = $c->dbh();
-	# i'm too reluctant to try to implement a cron-like something
-	$dbh->query('delete from sessions where expires < (0+?)',time) if rand() < $config->{session_cleanup_probability};
+	if (rand() < $config->{session_cleanup_probability}) {
+		# I'm too reluctant to try to implement a cron-like something
+		$dbh->query('delete from sessions where expires < (0+?)',time)
+			or die $dbh->error;
+	}
 	if ( $id
 		&& $dbh
 			->query('select human, expires, answer from sessions where id = ? and expires > (0+?)',$id,time)
@@ -245,11 +252,11 @@ helper check_human => sub { # to be used in edit.htm and post controller
 			if (defined $to_check and $config->{check_captcha}($answer, $to_check)) { # valid answer
 				$human = 1;
 			} else { # no answer or invalid
-				$dbh->delete('sessions',{id=>$id}); # delete the session so it won't be used again
+				$dbh->delete('sessions',{id=>$id}) or die $dbh->error; # delete the session so it won't be used again
 			}
 		}
 		if ($human) { # passed captcha sometime in the past => touch the session in DB and cookies
-			$dbh->update('sessions', { expires => time + $config->{session_timeout}, human => 1 }, { id => $id });
+			$dbh->update('sessions', { expires => time + $config->{session_timeout}, human => 1 }, { id => $id }) or die $dbh->error;
 			$c->session(id => $id); # touch session->id to make it last longer; XXX: is it needed?
 			return 1; # confirmed human; free to pass
 		}
@@ -271,7 +278,7 @@ helper captcha_field => sub {
 			id => $id, expires => time + $config->{session_timeout},
 			answer => $answer,
 		}
-	);
+	) or die $dbh->error;
 	$c->session(id => $id);
 	return Mojo::ByteStream::->new(qq{$challenge = <input name="captcha" type="text" required>});
 };
@@ -295,7 +302,8 @@ get '/*path' => sub {
 				      : 'select html, src from pages where title = ? order by time desc limit 1',
 				$path,
 				$edit || ()
-			)->into(my($html, $src));
+			)->into(my($html, $src))
+			or return $c->render('edit', html => '', src => '', msg => 'Page/revision not found', status => 404);
 		return $c->render('edit', html => $html, src => $src);
 	} elsif (defined($rev)) {
 		# list revisions or select a specific one
