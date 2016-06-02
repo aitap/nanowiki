@@ -1,19 +1,11 @@
 - refactor:
- ! replace 'parent' copypaste regexp with a helper
-  - maybe create a helper to insert a new page revision? I do it in two places
-  - actually, maybe I need a process_source *helper*?
+ ? 'parent' and 'title' regexps are still copypasted across code
  - schema updates
   - employ pragma user_version to store schema version and write alter table commands to upgrade
   - add the primary key (title, time) to 'pages' table already
 - admincmds
- + export to tree of *txt and import from it
-  + export
-  + compare sources and the stored rev number to determine whether an update is needed and notify of conflicts, if any
-  + this requires HTML processing to be available to ::admincmd package
- + delete page
- + rename page
- - dump into single HTML page
-  - special link handling => repurpose existing code
+ - dump into single HTML page (regenerated)
+  - inter-page links will require special handling; hopefully The Link-Processing Regexp won't need to be copypasted
 - conflict detection: compare param("edit") (revision being edited) with mtime of last revision and suggest merging
  - this will require Algorithm::Diff and a new template
 - employ FTS to search the wiki

@@ -114,11 +114,8 @@ sub run {
 					print "$time $File::Find::name -- unchanged\n";
 					return;
 				}
-				(my $parent = $found) =~ s{/[^/]+$}{}; # FIXME: this is copy-paste code
-				$dbh->insert("pages", {
-					title => $found, who => "local import", src => $src,
-					html => App::NanoWiki::process_source($found,$src), time => time(), parent => $parent
-				}) or die "$time $File::Find::name ".$dbh->error;
+				$self->app->insert_page_revision($found,$src,"local import")
+					or die "$time $File::Find::name ".$dbh->error;
 				print "$time $File::Find::name\n";
 			}, no_chdir => 1}, $dir);
 		},
@@ -186,7 +183,7 @@ helper 'normalize_path' => sub { # run once per request
 	return $path;
 };
 
-helper 'path_links' => sub { # transform /A/B/C into series of links to /A, /A/B, /A/B/C
+helper 'path_links' => sub { # transform /A/B/C from stash into series of links to /A, /A/B, /A/B/C
 	my $c = shift;
 	my $path = $c->stash("path");
 	# split path into parts to linkify them in the template
@@ -196,7 +193,7 @@ helper 'path_links' => sub { # transform /A/B/C into series of links to /A, /A/B
 	return @pathspec;
 };
 
-helper 'title_from_path' => sub { # /A/B/C -> C
+helper 'title_from_path' => sub { # stash: /A/B/C -> C
 	my $c = shift;
 	my ($title) = $c->stash("path") =~ m{([^/]+)$};
 	return $title;
@@ -357,6 +354,17 @@ sub process_source {
 	return textile($src);
 }
 
+helper insert_page_revision => sub {
+	my $c = shift;
+	my ($path, $src, $who) = @_;
+	(my $parent = $path) =~ s{/[^/]+$}{};
+	my $html = process_source($path,$src);
+	my $time = time;
+	return $c->dbh->insert('pages', { title => $path, who => $who, src => $src, html => $html, time => $time, parent => $parent })
+		? $time
+		: 0;
+};
+
 post '/*path' => sub {
 	my $c = shift;
 	my $path = $c->normalize_path;
@@ -365,18 +373,14 @@ post '/*path' => sub {
 		if $c->validation->csrf_protect->has_error;
 	return $c->render('edit', msg => 'Invadid CAPTCHA', src => $src, html => '', status => 403)
 		unless $c->check_human;
-	(my $parent = $path) =~ s{/[^/]+$}{};
 	my $preview = $c->param("preview");
 	my $exit = $c->param("exit");
-	my $html = process_source($path,$src);
-	my $time = time;
-	my $who = $c->whois;
 	if ($preview) { # no save, no redirect
-		return $c->render('edit', html => $html, src => $src, msg => "Preview mode");
+		return $c->render('edit', html => process_source($path,$src), src => $src, msg => "Preview mode");
 	}
 	# else save the data and decide where to redirect
-	$c->dbh->insert('pages', { title => $path, who => $who, src => $src, html => $html, time => $time, parent => $parent })
-		or return $c->render('edit', html => $html, src => $src, who => $who, time => $time, msg => "Database returned error, please retry", status => 500);
+	my $time = $c->insert_page_revision($path, $src, $c->whois)
+		or return $c->render('edit', html => process_source($path,$src), src => $src, msg => "Database returned error, please retry", status => 500);
 	return $c->redirect_to($c->url_for("/$path")->query($exit ? 'rev' : 'edit', $time));
 } => 'post';
 
