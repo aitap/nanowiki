@@ -440,6 +440,19 @@ __DATA__
 	</tr>
 <% } %>
 
+@@ exception.production.html.ep
+% layout 'default';
+<h1>Sorry...</h1>
+<div class="message">
+	A <b>very</b> serious problem has just occured. The error message, given below, has been recorded. Hopefully, someone will notice and fix it.
+	<blockquote><%= $exception->message %></blockquote>
+</div>
+<% if (my $src = $self->param("src")) { %>
+	<p>Since you were trying to make an edit, here is your source so you can copy it somewhere safe:</p>
+	<textarea rows=30><%= $src %></textarea>
+	<p>It has <b>not</b> been saved by the site.</p>
+<% } %>
+
 @@ layouts/default.html.ep
 <!DOCTYPE html>
 <html>
