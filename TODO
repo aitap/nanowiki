@@ -1,4 +1,6 @@
 - refactor:
+ ! split each controller into per-action ones (e.g. edit_form_controller vs. view_page_controller vs. view_history_controller)
+  => ease adding new ones (search_controller)
  ? 'parent' and 'title' regexps are still copypasted across code
  - schema updates
   - employ pragma user_version to store schema version and write alter table commands to upgrade
@@ -7,6 +9,8 @@
  - dump into single HTML page (regenerated)
   - inter-page links will require special handling; hopefully The Link-Processing Regexp won't need to be copypasted
  - maintaindb: SQLite3 ANALYZE; VACUUM; fts4 'optimize'; what else?
+- allow custom preprocessing functions via new config option
+ => e.g. s/\$([^\$]+)\$/'<img src="data:..."'.base64_encode(backtics("mimetex",...,$1)).../ge
 - conflict detection: compare param("edit") (revision being edited) with mtime of last revision and suggest merging
  - this will require Algorithm::Diff and a new template
 - employ FTS to search the wiki
