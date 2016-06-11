@@ -330,6 +330,7 @@ get '/*path' => sub {
 sub process_source {
 	use Mojo::Util qw(xml_escape);
 	my ($path, $src) = @_;
+	$src = $config->{preprocess_src}($src) if $config->{preprocess_src};
 	$src =~ s{ # giant regular expressions! shock, horrors!
 		\[\[   # wikilink begins with [[
 		([^|\]]+) # required part (page name) with no ] or | inside allowed

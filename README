@@ -3,3 +3,38 @@ Assertions:
   tables without primary key are used
   fts4 extension is planned to be used
  - UTF-8 everywhere, including the filesystem
+
+Config options:
+ - get_captcha: subroutine which should return an array of 2 items:
+  - string containing HTML representation of your CAPTCHA challenge
+  - string containing the actual answer to your challenge
+ - check_captcha: subroutine accepting 2 arguments
+  - original answer
+  - what user has entered
+  should return true if the answer is right, false otherwise
+ - preprocess_src: subroutine which accepts the source of wiki article,
+  prior to any (wikilink or textile) processing. Should return the processed
+  source of wiki article.
+
+Example preprocess_src: uses "mimetex" program to generate inline images of LaTeX formulae
+  "preprocess_src" => sub {
+  	use MIME::Base64 "encode_base64";
+  	my $src = shift;
+	$src =~ s{
+	  	(?<!\\)    # negative look-behind to make sure start is not escaped 
+		(?:        # start non-capture group for all possible match starts
+		    # group 1, match dollar signs only 
+		    # single or double dollar sign enforced by look-arounds
+		    ((?<!\$)\${1,2}(?!\$)) 
+		)
+		(.*?(?R)?.*?) # non-greedy; XXX: it's recursive
+		(?<!\\)  # negative look-behind to make sure end is not escaped
+		    # if group 1 was start, match \1
+		    (?(1)(?<!\$)\1(?!\$))
+	}{
+		open my $mt, "-|:raw", "mimetex", "-d", "-o", "-s", "3", $2 or die "mimetex: $!";
+		my $gif = do {local $/; <$mt>};
+		qq{<img src="data:image/gif;base64,}.encode_base64($gif).qq{">};
+	}exg;
+	return $src;
+  }
