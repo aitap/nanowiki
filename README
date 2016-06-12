@@ -21,20 +21,19 @@ Example preprocess_src: uses "mimetex" program to generate inline images of LaTe
   	use MIME::Base64 "encode_base64";
   	my $src = shift;
 	$src =~ s{
-	  	(?<!\\)    # negative look-behind to make sure start is not escaped 
-		(?:        # start non-capture group for all possible match starts
-		    # group 1, match dollar signs only 
-		    # single or double dollar sign enforced by look-arounds
-		    ((?<!\$)\${1,2}(?!\$)) 
-		)
+		(?<!\\)    # negative look-behind to make sure start is not escaped
+		# group 1, match dollar signs only
+		# single or double dollar sign enforced by look-arounds
+		((?<!\$)\${1,2}(?!\$))
 		(.*?(?R)?.*?) # non-greedy; XXX: it's recursive
-		(?<!\\)  # negative look-behind to make sure end is not escaped
-		    # if group 1 was start, match \1
-		    (?(1)(?<!\$)\1(?!\$))
+		(?<!\\)	# negative look-behind to make sure end is not escaped
+		(?(1)(?<!\$)\1(?!\$)) # if group 1 was start, match \1
 	}{
-		open my $mt, "-|:raw", "mimetex", "-d", "-o", "-s", "3", $2 or die "mimetex: $!";
+		my $big = $1 eq '$$';
+		open my $mt, "-|:raw", "mimetex", "-d", "-o", "-s", ($big ? 5 : 3), $2 or die "mimetex: $!";
 		my $gif = do {local $/; <$mt>};
-		qq{<img src="data:image/gif;base64,}.encode_base64($gif).qq{">};
+		my $img = qq{<img src="data:image/gif;base64,}.encode_base64($gif).qq{">};
+		$big ? qq{<p><center>$img</center></p>} : $img;
 	}exg;
 	return $src;
   }
