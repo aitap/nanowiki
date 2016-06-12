@@ -138,7 +138,7 @@ use Scalar::Util 'looks_like_number';
 
 app->attr(conffile => $ENV{NANOWIKI_CONFIG} // "nanowiki.cnf"); # to use it from ::command
 
-my $config = plugin Config => {
+my $config = {%{plugin Config => {
 	file => app->conffile, default => {
 		sqlite_filename => "nanowiki.db",
 		session_entropy => 128,
@@ -147,7 +147,10 @@ my $config = plugin Config => {
 		session_timeout => 60*60*24*7, # sessions expire if not used in one week
 		session_cleanup_probability => .05,
 	}
-};
+}}};
+# XXX: make a copy so we don't accidentally put *_captcha to the original
+# which might get written to a file by admincmd init
+# ugly?
 
 app->secrets(app->config("secrets"));
 app->sessions->default_expiration($config->{session_timeout});
