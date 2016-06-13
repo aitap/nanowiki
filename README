@@ -17,23 +17,38 @@ Config options:
   source of wiki article.
 
 Example preprocess_src: uses "mimetex" program to generate inline images of LaTeX formulae
-  "preprocess_src" => sub {
-  	use MIME::Base64 "encode_base64";
-  	my $src = shift;
-	$src =~ s{
-		(?<!\\)    # negative look-behind to make sure start is not escaped
-		# group 1, match dollar signs only
-		# single or double dollar sign enforced by look-arounds
-		((?<!\$)\${1,2}(?!\$))
-		(.*?(?R)?.*?) # non-greedy; XXX: it's recursive
-		(?<!\\)	# negative look-behind to make sure end is not escaped
-		(?(1)(?<!\$)\1(?!\$)) # if group 1 was start, match \1
-	}{
-		my $big = $1 eq '$$';
-		open my $mt, "-|:raw", "mimetex", "-d", "-o", "-s", ($big ? 5 : 3), $2 or die "mimetex: $!";
-		my $gif = do {local $/; <$mt>};
-		my $img = qq{<img src="data:image/gif;base64,}.encode_base64($gif).qq{">};
-		$big ? qq{<p><center>$img</center></p>} : $img;
-	}exg;
-	return $src;
-  }
+	"preprocess_src" => sub {
+		use MIME::Base64 "encode_base64";
+		my $src = shift;
+		$src =~ s{
+			(?<!\\)		# negative look-behind to make sure start is not escaped
+			# group 1, match dollar signs only
+			# single or double dollar sign enforced by look-arounds
+			((?<!\$)\${1,2}(?!\$))
+			(.*?(?R)?.*?) # non-greedy; XXX: it's recursive
+			(?<!\\)	# negative look-behind to make sure end is not escaped
+			(?(1)(?<!\$)\1(?!\$)) # if group 1 was start, match \1
+		}{
+			my $big = $1 eq '$$';
+			open my $mt, "-|:raw", "mimetex", "-d", "-o", "-s", ($big ? 5 : 3), $2 or die "mimetex: $!";
+			my $gif = do {local $/; <$mt>};
+			my $img = qq{<img src="data:image/gif;base64,}.encode_base64($gif).qq{">};
+			$big ? qq{<p><center>$img</center></p>} : $img;
+		}exg;
+		return $src;
+	}
+
+Example get_captcha: uses ImageMagick to generate an image-captcha (for users without sufficient fonts to use default one, e.g. mobile):
+	"get_captcha" => sub {
+		use Mojo::Util 'b64_encode';
+		my @operands = qw(- + / *);
+		my $challenge = int rand 20;
+		$challenge .= " ".$operands[int rand @operands]." ".(int(rand 20)+1) for 1..2;
+		my $answer = eval $challenge; # string eval! shock, horrors!
+		$challenge = do {
+			open my $fh, "-|:raw", "convert", "label:$challenge", "+noise", "Gaussian", "-quality", "20", "jpg:-" or die "mimetex: $!";
+			local $/;
+			'<img src="data:image/jpeg;base64,'.b64_encode(<$fh>).'">';
+		};
+		return ($challenge, $answer);
+	} # default check_captcha still works
