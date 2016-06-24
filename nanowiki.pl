@@ -289,6 +289,44 @@ get '/' => sub {
   return $c->redirect_to('page', path => $config->{root_page});
 };
 
+helper 'render_edit_form' => sub {
+	my ($c,$edit,$path) = @_;
+	my $dbh = $c->dbh;
+	$dbh
+		->query(
+			$edit ? 'select html, src from pages where title = ? and time = (0+?) order by time desc limit 1'
+			      : 'select html, src from pages where title = ? order by time desc limit 1',
+			$path,
+			$edit || ()
+		)->into(my($html, $src))
+		or return $c->render('edit', html => '', src => '', msg => 'Page/revision not found', status => 404);
+	return $c->render('edit', html => $html, src => $src);
+};
+
+helper 'render_page' => sub {
+	my ($c, $path, $rev) = @_;
+	my $dbh = $c->dbh;
+	$dbh
+		->query(
+			defined($rev) ? 'select who, html, time from pages where title = ? and time = (0+?)'
+			              : 'select who, html, time from pages where title = ? order by time desc limit 1',
+			$path, $rev // ()
+		)->into(my($who, $html, $time))
+		or return $c->render('edit', msg => 'Page/revision not found, create one?', src => '', html => '', status => 404);
+	return $c->render('page', html => $html, who => $who, time => $time);
+};
+
+helper 'render_list_revisions' => sub {
+	my ($c, $path) = @_;
+	my $dbh = $c->dbh;
+	my @history = $dbh
+		->select('pages', [qw/time who/], { title => $path }, { -desc => 'time' })
+		->arrays;
+	return $c->render('edit', msg => 'Page not found', src => '', html => '', status => 404)
+		unless @history;
+	return $c->render('history', history => \@history);
+};
+
 get '/*path' => sub {
 	my $c = shift;
 	my $path = $c->normalize_path;
@@ -296,37 +334,16 @@ get '/*path' => sub {
 	my $rev = $c->param('rev');
 	my $dbh = $c->dbh;
 	if (defined($edit)) { # show edit form
-		$dbh
-			->query(
-				$edit ? 'select html, src from pages where title = ? and time = (0+?) order by time desc limit 1'
-				      : 'select html, src from pages where title = ? order by time desc limit 1',
-				$path,
-				$edit || ()
-			)->into(my($html, $src))
-			or return $c->render('edit', html => '', src => '', msg => 'Page/revision not found', status => 404);
-		return $c->render('edit', html => $html, src => $src);
+		return $c->render_edit_form($edit, $path);
 	} elsif (defined($rev)) {
 		# list revisions or select a specific one
 		if ($rev and looks_like_number($rev)) { # 0 and '' are not valid revisions
-			$dbh
-				->query('select who, html from pages where title = ? and time = (0+?)', $path, $rev)
-				->into(my($who, $html))
-				or return $c->render('edit', msg => 'Invalid revision number', src => '', html => '', status => 404);
-			return $c->render('page', html => $html, who => $who, time => $rev);
+			return $c->render_page($path,$rev);
 		} else { # asked for list of revisions
-			my @history = $dbh
-				->select('pages', [qw/time who/], { title => $path }, { -desc => 'time' })
-				->arrays;
-			return $c->render('edit', msg => 'Page not found', src => '', html => '', status => 404)
-				unless @history;
-			return $c->render('history', history => \@history);
+			return $c->render_list_revisions($path);
 		}
 	} else { # just plain view last revision
-		$dbh
-			->query('select who, html, time from pages where title = ? order by time desc limit 1', $path)
-			->into(my($who, $html, $time))
-			or return $c->render('edit', msg => 'Page not found, create one now?', src => '', html => '', status => 404);
-		return $c->render('page', html => $html, who => $who, time => $time);
+		return $c->render_page($path);
 	}
 } => 'page';
 
@@ -369,14 +386,9 @@ helper insert_page_revision => sub {
 		: 0;
 };
 
-post '/*path' => sub {
-	my $c = shift;
+helper handle_edit_page => sub {
+	my ($c,$src) = @_;
 	my $path = $c->normalize_path;
-	my $src = $c->param("src");
-	return $c->render('edit', msg => 'Invalid request (CSRF)', src => $src, html => '', status => 403)
-		if $c->validation->csrf_protect->has_error;
-	return $c->render('edit', msg => 'Invadid CAPTCHA', src => $src, html => '', status => 403)
-		unless $c->check_human;
 	my $preview = $c->param("preview");
 	my $exit = $c->param("exit");
 	if ($preview) { # no save, no redirect
@@ -386,6 +398,16 @@ post '/*path' => sub {
 	my $time = $c->insert_page_revision($path, $src, $c->whois)
 		or return $c->render('edit', html => process_source($path,$src), src => $src, msg => "Database returned error, please retry", status => 500);
 	return $c->redirect_to($c->url_for("/$path")->query($exit ? 'rev' : 'edit', $time));
+};
+
+post '/*path' => sub {
+	my $c = shift;
+	my $src = $c->param("src");
+	return $c->render('edit', msg => 'Invalid request (CSRF)', src => $src, html => '', status => 403)
+		if $c->validation->csrf_protect->has_error;
+	return $c->render('edit', msg => 'Invadid CAPTCHA', src => $src, html => '', status => 403)
+		unless $c->check_human;
+	return $c->handle_edit_page($src);
 } => 'post';
 
 push @{app->commands->namespaces}, __PACKAGE__;
