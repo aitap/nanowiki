@@ -165,6 +165,22 @@ helper 'dbh' => sub {
 	});
 };
 
+#app->dbh->sqlite_create_function("searchrank", -1, sub {
+#	my ($matchinfo, @weights) = @_;
+#	...;
+#	# matchinfo defaults to "pcx", thus:
+#	# - number of phrases
+#	# - number of columns
+#	# - {
+#	#   - appears here
+#	#   - sum(appearances): phrase appears in column
+#	#   - num(rows): phrase appears in column
+#	#   } per phrase per column
+#	# = 32-bit unsigned integers in machine byte-order
+#	# TODO: look at rankfunc @ http://sqlite.org/fts3.html
+#});
+# FIXME: how to access DBD::SQLite's sqlite_create_function via DBIx::Simple object?
+
 # from Mojolicious::Guides::Tutorial
 helper 'whois' => sub {
 	my $c     = shift;
