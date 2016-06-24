@@ -388,6 +388,10 @@ helper insert_page_revision => sub {
 
 helper handle_edit_page => sub {
 	my ($c,$src) = @_;
+	return $c->render('edit', msg => 'Invalid request (CSRF)', src => $src, html => '', status => 403)
+		if $c->validation->csrf_protect->has_error;
+	return $c->render('edit', msg => 'Invadid CAPTCHA', src => $src, html => '', status => 403)
+		unless $c->check_human;
 	my $path = $c->normalize_path;
 	my $preview = $c->param("preview");
 	my $exit = $c->param("exit");
@@ -400,13 +404,18 @@ helper handle_edit_page => sub {
 	return $c->redirect_to($c->url_for("/$path")->query($exit ? 'rev' : 'edit', $time));
 };
 
+helper handle_search => sub {
+	my $c = shift;
+	...;
+};
+
 post '/*path' => sub {
 	my $c = shift;
 	my $src = $c->param("src");
-	return $c->render('edit', msg => 'Invalid request (CSRF)', src => $src, html => '', status => 403)
-		if $c->validation->csrf_protect->has_error;
-	return $c->render('edit', msg => 'Invadid CAPTCHA', src => $src, html => '', status => 403)
-		unless $c->check_human;
+	my $search = $c->param("search");
+	if (defined($search)) {
+		return $c->handle_search($search);
+	}
 	return $c->handle_edit_page($src);
 } => 'post';
 
@@ -418,11 +427,17 @@ __DATA__
 @@ page.html.ep
 % layout 'default';
 % use POSIX 'strftime';
-<div class="children"><ul>
-	<% for (children()) { %>
-		<li><a href="/<%= url_for $_->[1] %>"><%= $_->[0] %></a></li>
-	<% } %>
-</ul></div>
+<div class="children">
+	<ul>
+		<% for (children()) { %>
+			<li><a href="/<%= url_for $_->[1] %>"><%= $_->[0] %></a></li>
+		<% } %>
+	</ul>
+	<form method="post">
+		<input type="submit" value="Search" id="searchbutton">
+		<div id="searchtext"><input type="text" name="search"></div>
+	</form>
+</div>
 <div class="content"><%== $html %></div>
 <div class="footer">
 	<a href="?edit=<%= $time %>">Edit</a>
@@ -494,6 +509,15 @@ __DATA__
 				background-color: #eeeeee;
 				margin: 10px;
 				border-radius: 5px;
+			}
+			#searchtext {
+				overflow: hidden;
+			}
+			#searchtext > .input {
+				width: 100%;
+			}
+			#searchbutton {
+				float: right;
 			}
 			.content_block {
 				text-align: justify;
