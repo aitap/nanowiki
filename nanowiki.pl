@@ -165,21 +165,25 @@ helper 'dbh' => sub {
 	});
 };
 
-#app->dbh->sqlite_create_function("searchrank", -1, sub {
-#	my ($matchinfo, @weights) = @_;
-#	...;
-#	# matchinfo defaults to "pcx", thus:
-#	# - number of phrases
-#	# - number of columns
-#	# - {
-#	#   - appears here
-#	#   - sum(appearances): phrase appears in column
-#	#   - num(rows): phrase appears in column
-#	#   } per phrase per column
-#	# = 32-bit unsigned integers in machine byte-order
-#	# TODO: look at rankfunc @ http://sqlite.org/fts3.html
-#});
-# FIXME: how to access DBD::SQLite's sqlite_create_function via DBIx::Simple object?
+app->dbh->dbh->sqlite_create_function("searchrank", -1, sub {
+	use List::Util "sum";
+	my ($matchinfo_blob, @weights) = @_;
+	# when called with "pcx" arguments (default), matchinfo returns:
+	# - number of phrases
+	# - number of columns
+	# - {
+	#   - [+0] num(appears here)
+	#   - [+1] sum(appearances): phrase appears in column
+	#   - [+2] num(rows): phrase appears in column
+	#   } per column, then per phrase
+	# = 32-bit unsigned integers in machine byte-order
+	my ($nphrases, $ncols, @matchinfo) = unpack "L*", $matchinfo_blob;
+	# rank = sum { <appears here> / <appears in column> * weight } per phrase per column
+	return sum map {
+		my $phrase = $_;
+		sum map { $matchinfo[3*($phrase*$ncols+$_)] / $matchinfo[3*($phrase*$ncols+$_)+1] * $weights[$_] } (0 .. $ncols)
+	} (0 .. $nphrases-1);
+});
 
 # from Mojolicious::Guides::Tutorial
 helper 'whois' => sub {
