@@ -5,7 +5,7 @@
 - admincmds
  - dump into single HTML page (regenerated)
   - inter-page links will require special handling; hopefully The Link-Processing Regexp won't need to be copypasted
- - maintaindb: SQLite3 ANALYZE; VACUUM; fts4 'optimize'; what else?
+ + maintaindb: SQLite3 ANALYZE; VACUUM; fts4 'optimize';
 - conflict detection: compare param("edit") (revision being edited) with mtime of last revision and suggest merging
  - this will require Algorithm::Diff and a new template
 - employ FTS to search the wiki

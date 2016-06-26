@@ -11,6 +11,8 @@ init
 	Write default config file, create the database file and tables
 upgradedb
 	Upgrade the database to match the application schema version.
+maintaindb
+	Run VACUUM, ANALYZE, on the DB; run 'optimize' on FTS table.
 
 delete <page> [page ...]
 	Delete specified pages completely
@@ -203,6 +205,12 @@ end;",
 		},
 		dump => sub {
 			...;
+		},
+		maintaindb => sub {
+			my $dbh = $self->app->dbh;
+			$dbh->query($_) or die $dbh->error for (
+				"vacuum;", "insert into ftsindex(ftsindex) values ('optimize');", "analyze;"
+			);
 		},
 	);
 	unless (@args and exists $commands{$args[0]}) {
