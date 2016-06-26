@@ -31,7 +31,7 @@ sub run {
 			use autodie; # open, print, close
 			my $config = $self->app->config;
 			open my $conf_handle, ">:utf8", $self->app->conffile; # still looks ugly?
-			print $conf_handle Data::Dumper::->new([$config], ['config'])->Terse(1)->Useqq(1)->Dump;
+			print $conf_handle Data::Dumper::->new([$config], ['config'])->Terse(1)->Useqq(1)->Deparse(1)->Dump;
 			close $conf_handle;
 			my $dbh = $self->app->dbh;
 			$dbh->query($_) or die $dbh->error for (
