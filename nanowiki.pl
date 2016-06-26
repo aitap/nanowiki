@@ -465,6 +465,7 @@ __DATA__
 		<td><%= $row->[1] %></td>
 	</tr>
 <% } %>
+</table>
 
 @@ exception.production.html.ep
 % layout 'default';
