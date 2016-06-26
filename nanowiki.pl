@@ -9,11 +9,15 @@ Available commands:
 
 init
 	Write default config file, create the database file and tables
+upgradedb
+	Upgrade the database to match the application schema version.
+
 delete <page> [page ...]
 	Delete specified pages completely
 rename <from> <to>
 	Move a page from one path to another. Ordinary paths look like
 	"Welcome/subpage/subsubpage".
+
 export <directory>
 	Export the wiki as a series of text files containing Textile
 	source of the articles to the specified directory.
@@ -119,6 +123,32 @@ sub run {
 				print "$time $File::Find::name\n";
 			}, no_chdir => 1}, $dir);
 		},
+		upgradedb => sub {
+			my @upgradefrom = (
+				# array of arrays of SQL statements
+				# n'th array upgrades the DB from schema version n to version n+1
+			);
+			my $dbh = $self->app->dbh;
+			my $appver = $self->app->schema_version;
+			$dbh->query("pragma user_version;")->into(my $dbver);
+			if ($dbver > $appver) {
+				die "Cannot downgrade database from $dbver to $appver. Please upgrade the application.\n";
+			}
+			while ($appver > $dbver) {
+				print "Upgrading from version $dbver\n";
+				$dbh->begin_work;
+				unless(eval {
+					$dbh->query($_) or die $dbh->error for @{$upgradefrom[$dbver]};
+					1;
+				}) {
+					$dbh->rollback;
+					die;
+				}
+				$dbh->commit;
+				$dbh->query("pragma user_version;")->into($dbver);
+			}
+			print "Application schema version ($appver) matches database version ($dbver)\n";
+		},
 		dump => sub {
 			...;
 		},
@@ -137,6 +167,7 @@ use Text::Textile 'textile';
 use Scalar::Util 'looks_like_number';
 
 app->attr(conffile => $ENV{NANOWIKI_CONFIG} // "nanowiki.cnf"); # to use it from ::command
+app->attr(schema_version => 0);
 
 my $config = {%{plugin Config => {
 	file => app->conffile, default => {
@@ -165,25 +196,38 @@ helper 'dbh' => sub {
 	});
 };
 
-app->dbh->dbh->sqlite_create_function("searchrank", -1, sub {
-	use List::Util "sum";
-	my ($matchinfo_blob, @weights) = @_;
-	# when called with "pcx" arguments (default), matchinfo returns:
-	# - number of phrases
-	# - number of columns
-	# - {
-	#   - [+0] num(appears here)
-	#   - [+1] sum(appearances): phrase appears in column
-	#   - [+2] num(rows): phrase appears in column
-	#   } per column, then per phrase
-	# = 32-bit unsigned integers in machine byte-order
-	my ($nphrases, $ncols, @matchinfo) = unpack "L*", $matchinfo_blob;
-	# rank = sum { <appears here> / <appears in column> * weight } per phrase per column
-	return sum map {
-		my $phrase = $_;
-		sum map { $matchinfo[3*($phrase*$ncols+$_)] / $matchinfo[3*($phrase*$ncols+$_)+1] * $weights[$_] } (0 .. $ncols)
-	} (0 .. $nphrases-1);
-});
+{
+	my $dbh = app->dbh;
+	# ->dbh to get the DBI object
+	$dbh->dbh->sqlite_create_function("searchrank", -1, sub {
+		use List::Util "sum";
+		my ($matchinfo_blob, @weights) = @_;
+		# when called with "pcx" arguments (default), matchinfo returns:
+		# - number of phrases
+		# - number of columns
+		# - {
+		#   - [+0] num(appears here)
+		#   - [+1] sum(appearances): phrase appears in column
+		#   - [+2] num(rows): phrase appears in column
+		#   } per column, then per phrase
+		# = 32-bit unsigned integers in machine byte-order
+		my ($nphrases, $ncols, @matchinfo) = unpack "L*", $matchinfo_blob;
+		# rank = sum { <appears here> / <appears in column> * weight } per phrase per column
+		return sum map {
+			my $phrase = $_;
+			sum map { $matchinfo[3*($phrase*$ncols+$_)] / $matchinfo[3*($phrase*$ncols+$_)+1] * $weights[$_] } (0 .. $ncols)
+		} (0 .. $nphrases-1);
+	});
+	$dbh->query("pragma user_version;")->into(my $dbversion);
+	if (my $cmp = ($dbversion <=> app->schema_version)) { # a complicated way to say !=
+		die "Database version ($dbversion) doesn't match the application version (".app->schema_version.").\n"
+		    .(
+				"", # 0 means equal and shouldn't happen
+				"Unfortunately, database downgrades are not supported. Please upgrade the app ($0).\n", # 1 means that DB is newer than app
+				"Use '$0 admincmd upgradedb' to upgrade the schema. Backup the database (".$config->{sqlite_filename}.") first.\n", # -1 means that DB is older than app
+			)[$cmp];
+	}
+}
 
 # from Mojolicious::Guides::Tutorial
 helper 'whois' => sub {

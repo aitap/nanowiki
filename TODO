@@ -3,7 +3,7 @@
   => ease adding new ones (search_controller)
  ? 'parent' and 'title' regexps are still copypasted across code
  - schema updates
-  - employ pragma user_version to store schema version and write alter table commands to upgrade
+  + employ pragma user_version to store schema version and write alter table commands to upgrade
   - add the primary key (title, time) to 'pages' table already
 - admincmds
  - dump into single HTML page (regenerated)
