@@ -1,12 +1,7 @@
 - FIXME: refuse to start the server if DB versions mismatch but allow admincmds to run
  - die() cripples commands by crashing before them
 - refactor:
- + split each controller into per-action ones (e.g. edit_form_controller vs. view_page_controller vs. view_history_controller)
-  => ease adding new ones (search_controller)
  ? 'parent' and 'title' regexps are still copypasted across code
- + schema updates
-  + employ pragma user_version to store schema version and write alter table commands to upgrade
-  + add the primary key (title, time) to 'pages' table already
 - admincmds
  - dump into single HTML page (regenerated)
   - inter-page links will require special handling; hopefully The Link-Processing Regexp won't need to be copypasted
@@ -27,7 +22,8 @@
 	-- triggers to work on index automatically - makes Perl side easier
   + SELECT snip, time, title FROM pages JOIN (SELECT docid AS idxid, snippet(ftsindex) AS snip FROM ftsindex WHERE src MATCH ?) ON pages.rowid = idxid;
     -- we can't MATCH a JOIN result, therefore we JOIN a MATCH result
-	-- TODO: implement rank() function for rank(matchinfo(ftsindex)) AS rkval and ORDER BY rkval DESC; see rankfunc at http://sqlite.org/fts3.html
+   + implement rank() function for rank(matchinfo(ftsindex)) AS rkval and ORDER BY rkval DESC; see rankfunc at http://sqlite.org/fts3.html
+  - FIXME: searching across all revisions may look ugly, but otherwise revision history is severely crippled. What to do?
 - normalize_path helper is still somewhat ugly => find a way to make sure path is normalized automatically
 - use EXPLAIN QUERY PLAN to make sure indices are used in every search query
 - CPANify

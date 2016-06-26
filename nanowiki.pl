@@ -241,15 +241,11 @@ $config->{get_captcha} ||= \&get_captcha;
 $config->{check_captcha} ||= \&check_captcha;
 
 helper 'dbh' => sub {
-	return DBIx::Simple::->connect("dbi:SQLite:dbname=".$config->{sqlite_filename},"","",{
+	my $dbh = DBIx::Simple::->connect("dbi:SQLite:dbname=".$config->{sqlite_filename},"","",{
 		sqlite_unicode => 1,
 		AutoCommit => 1,
 		RaiseError => 1,
 	});
-};
-
-{
-	my $dbh = app->dbh;
 	# ->dbh to get the DBI object
 	$dbh->dbh->sqlite_create_function("searchrank", -1, sub {
 		use List::Util "sum";
@@ -267,19 +263,25 @@ helper 'dbh' => sub {
 		# rank = sum { <appears here> / <appears in column> * weight } per phrase per column
 		return sum map {
 			my $phrase = $_;
-			sum map { $matchinfo[3*($phrase*$ncols+$_)] / $matchinfo[3*($phrase*$ncols+$_)+1] * $weights[$_] } (0 .. $ncols)
+			sum map {
+				my $nhits = $matchinfo[3*($phrase*$ncols+$_)];
+				$nhits ? ($nhits / $matchinfo[3*($phrase*$ncols+$_)+1] * $weights[$_]) : ()
+			} (0 .. $ncols)
 		} (0 .. $nphrases-1);
 	});
-	$dbh->query("pragma user_version;")->into(my $dbversion);
-	if (my $cmp = ($dbversion <=> app->schema_version)) { # a complicated way to say !=
-		warn "Database version ($dbversion) doesn't match the application version (".app->schema_version.").\n"
-		    .(
-				"", # 0 means equal and shouldn't happen
-				"Unfortunately, database downgrades are not supported. Please upgrade the app ($0).\n", # 1 means that DB is newer than app
-				"Use '$0 admincmd upgradedb' to upgrade the schema. Backup the database (".$config->{sqlite_filename}.") first.\n", # -1 means that DB is older than app
-			)[$cmp];
-	}
+	return $dbh;
+};
+
+app->dbh->query("pragma user_version;")->into(my $dbversion);
+if (my $cmp = ($dbversion <=> app->schema_version)) { # a complicated way to say !=
+	warn "Database version ($dbversion) doesn't match the application version (".app->schema_version.").\n"
+	    .(
+			"", # 0 means equal and shouldn't happen
+			"Unfortunately, database downgrades are not supported. Please upgrade the app ($0).\n", # 1 means that DB is newer than app
+			"Use '$0 admincmd upgradedb' to upgrade the schema. Backup the database (".$config->{sqlite_filename}.") first.\n", # -1 means that DB is older than app
+		)[$cmp];
 }
+
 
 # from Mojolicious::Guides::Tutorial
 helper 'whois' => sub {
@@ -521,8 +523,26 @@ helper handle_edit_page => sub {
 };
 
 helper handle_search => sub {
-	my $c = shift;
-	...;
+	my ($c,$search) = @_;
+	my $dbh = $c->dbh;
+	my $results = $dbh->query("
+		select snip, time, title
+		from pages join
+			(
+				select
+					docid as idxid,
+					snippet(ftsindex) as snip,
+					searchrank(matchinfo(ftsindex,'pcx'),0.5,1.0) as rkval
+				from ftsindex
+				where src match ?
+			)
+			on pages.rowid = idxid
+		order by rkval desc
+		;
+	", $search) or die $dbh->error;
+	# process_source to make sure there are no HTML injections, but keep HTML from SQLite snippet function
+	# of course, the snippet is damaged in process
+	return $c->render('search', results => [ map { $_->[0] = process_source($_->[2],$_->[0]); $_ } $results->arrays ], search => $search);
 };
 
 post '/*path' => sub {
@@ -596,6 +616,31 @@ __DATA__
 		<td><%= $row->[1] %></td>
 	</tr>
 <% } %>
+
+@@ search.html.ep
+% layout 'default';
+% use POSIX 'strftime';
+<div class="children">
+	<form method="post">
+		<input type="submit" value="Search" id="searchbutton">
+		<div id="searchtext"><input type="text" name="search" value="<%= $search %>"></div>
+	</form>
+</div>
+<table>
+<tr>
+	<th>Page</th>
+	<th>Revision</th>
+	<th>Snippet</th>
+</tr>
+<% for my $result (@$results) { %>
+	<tr>
+		<td><a href="/<%= url_for($result->[2])->query(rev => $result->[1]) %>"><%= $result->[2] %></a></td>
+		<td><%= strftime "%Y-%m-%d %H:%M:%S" => localtime $result->[1] %></td>
+		<td><%== $result->[0] %></td>
+	</tr>
+<% } %>
+</table>
+The form accepts "ordinary" search engine expressions. Details: <a href="http://sqlite.org/fts3.html#section_3">Full-text Index Queries</a>
 
 @@ exception.production.html.ep
 % layout 'default';
