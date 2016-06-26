@@ -39,25 +39,39 @@ sub run {
 			close $conf_handle;
 			my $dbh = $self->app->dbh;
 			$dbh->query($_) or die $dbh->error for (
-"create table if not exists pages (
-	title text,
-	who text,
+"create table pages (
+	title text not null,
+	who text not null,
 	src text,
 	html text,
-	time integer,
-	parent text
+	time integer not null,
+	parent text not null,
+	primary key (title, time)
 );",
-"create index if not exists pages_title on pages (title);", # GET /path/to/page
-"create index if not exists pages_title_time on pages (title, time);", # GET /path/to/page?rev=1234
-"create index if not exists pages_parent on pages (parent);", # list of children
-"create table if not exists sessions (
-	id text primary key, -- from Session::Token
-	human bool,
-	expires integer,
-	answer text
+"create index pages_title on pages (title);", # GET /path/to/page
+"create index pages_parent on pages (parent);", # list of children
+"create table sessions (
+	id text primary key not null,
+	human bool not null,
+	expires integer not null,
+	answer text not null
 );",
-"create index if not exists sessions_id_expires on sessions (id, expires);", # look up whether a session is valid
-"create index if not exists sessions_expires on sessions (expires);", # clean up stale sessions
+"create index sessions_id_expires on sessions (id, expires);", # look up whether a session is valid
+"create index sessions_expires on sessions (expires);", # clean up stale sessions
+'create virtual table ftsindex using fts4(content="pages",src,title,tokenize=unicode61)',
+"create trigger pages_before_update before update on pages begin
+	delete from ftsindex where docid=old.rowid;
+end;",
+"create trigger pages_before_delete before delete on pages begin
+	delete from ftsindex where docid=old.rowid;
+end;",
+"create trigger pages_after_update after update on pages begin
+	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title);
+end;",
+"create trigger pages_after_insert after insert on pages begin
+	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title);
+end;",
+"pragma user_version = ".$self->app->schema_version.";"
 			);
 		},
 		delete => sub {
@@ -125,8 +139,46 @@ sub run {
 		},
 		upgradedb => sub {
 			my @upgradefrom = (
-				# array of arrays of SQL statements
-				# n'th array upgrades the DB from schema version n to version n+1
+				[
+					# create primary key (title, time) on pages
+					# and add NOT NULL constraints to most columns
+"create table pages_ (
+	title text not null,
+	who text not null,
+	src text,
+	html text,
+	time integer not null,
+	parent text not null,
+	primary key (title, time)
+);",
+"insert into pages_ select * from pages;",
+"drop table pages;",
+"alter table pages_ rename to pages;",
+"create index pages_title on pages (title);",
+"create index pages_parent on pages (parent);",
+					# add NOT NULL to the sessions table
+					# also, get rid of unused "challenge" column for free, if it ever existed
+"create table sessions_ (
+	id text primary key not null,
+	human bool not null,
+	expires integer not null,
+	answer text not null
+);",
+"insert into sessions_ select id, human, expires, answer from sessions;",
+"drop table sessions;",
+"alter table sessions_ rename to sessions;",
+"create index sessions_id_expires on sessions (id, expires);",
+"create index sessions_expires on sessions (expires);",
+					# create the FTS table
+'create virtual table ftsindex using fts4(content="pages",src,title,tokenize=unicode61)',
+"create trigger pages_before_update before update on pages begin delete from ftsindex where docid=old.rowid; end;",
+"create trigger pages_before_delete before delete on pages begin delete from ftsindex where docid=old.rowid; end;",
+"create trigger pages_after_update after update on pages begin insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title); end;",
+"create trigger pages_after_insert after insert on pages begin insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title); end;",
+"insert into ftsindex(docid,src,title) select rowid, src, title from pages;", # populate the index
+					# last, update the schema version
+"pragma user_version = 1;"
+				],
 			);
 			my $dbh = $self->app->dbh;
 			my $appver = $self->app->schema_version;
@@ -167,7 +219,7 @@ use Text::Textile 'textile';
 use Scalar::Util 'looks_like_number';
 
 app->attr(conffile => $ENV{NANOWIKI_CONFIG} // "nanowiki.cnf"); # to use it from ::command
-app->attr(schema_version => 0);
+app->attr(schema_version => 1);
 
 my $config = {%{plugin Config => {
 	file => app->conffile, default => {
@@ -220,7 +272,7 @@ helper 'dbh' => sub {
 	});
 	$dbh->query("pragma user_version;")->into(my $dbversion);
 	if (my $cmp = ($dbversion <=> app->schema_version)) { # a complicated way to say !=
-		die "Database version ($dbversion) doesn't match the application version (".app->schema_version.").\n"
+		warn "Database version ($dbversion) doesn't match the application version (".app->schema_version.").\n"
 		    .(
 				"", # 0 means equal and shouldn't happen
 				"Unfortunately, database downgrades are not supported. Please upgrade the app ($0).\n", # 1 means that DB is newer than app
