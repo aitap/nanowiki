@@ -173,22 +173,9 @@ helper 'whois' => sub {
 	return "$agent ($ip)";
 };
 
-helper 'normalize_path' => sub { # run once per request
-	my $c = shift;
-	my $path = $c->stash("path");
-	# multiple /s mean nothing
-	$path =~ s{/{2,}}{/}g;
-	# process ../ in path
-	$path =~ s{[^/]*/\.\./}{}g;
-	# / in the end should also be sanitized
-	$path =~ s{/$}{};
-	$c->stash("path" => $path);
-	return $path;
-};
-
 helper 'path_links' => sub { # transform /A/B/C from stash into series of links to /A, /A/B, /A/B/C
 	my $c = shift;
-	my $path = $c->stash("path");
+	my $path = $c->stash("title");
 	# split path into parts to linkify them in the template
 	my @pathspec = map { [ $_ ] } split /\//, $path;
 	$pathspec[0][1] = "/$pathspec[0][0]";
@@ -198,7 +185,7 @@ helper 'path_links' => sub { # transform /A/B/C from stash into series of links 
 
 helper 'title_from_path' => sub { # stash: /A/B/C -> C
 	my $c = shift;
-	my ($title) = $c->stash("path") =~ m{([^/]+)$};
+	my ($title) = $c->stash("title") =~ m{([^/]+)$};
 	return $title;
 };
 
@@ -210,7 +197,7 @@ helper children => sub { # all pages which have current as their parent
 			my ($title) = m{([^/]+)$};
 			[ $title, $_ ]
 		}
-		$dbh->query("select distinct(title) from pages where parent = ?", $c->stash("path"))->flat
+		$dbh->query("select distinct(title) from pages where parent = ?", $c->stash("title"))->flat
 		;
 };
 
@@ -283,10 +270,18 @@ helper captcha_field => sub {
 	return Mojo::ByteStream::->new(qq{$challenge = <input name="captcha" type="text" required>});
 };
 
-# hopefully all pages will be children of the root node
-get '/' => sub {
-  my $c = shift;
-  return $c->redirect_to('page', path => $config->{root_page});
+under '/*path_' => {path_ => $config->{root_page}} => sub {
+	my $c = shift;
+	# normalize path
+	my $path = $c->stash("path_");
+	# multiple /s mean nothing
+	$path =~ s{/{2,}}{/}g;
+	# strip ../ in path
+	$path =~ s{[^/]*/\.\./}{}g;
+	# / in the end should also be sanitized
+	$path =~ s{/$}{};
+	$c->stash("title" => $path);
+	return 1;
 };
 
 helper 'render_edit_form' => sub {
@@ -327,9 +322,9 @@ helper 'render_list_revisions' => sub {
 	return $c->render('history', history => \@history);
 };
 
-get '/*path' => sub {
+get sub {
 	my $c = shift;
-	my $path = $c->normalize_path;
+	my $path = $c->stash("title");
 	my $edit = $c->param('edit');
 	my $rev = $c->param('rev');
 	my $dbh = $c->dbh;
@@ -345,7 +340,7 @@ get '/*path' => sub {
 	} else { # just plain view last revision
 		return $c->render_page($path);
 	}
-} => 'page';
+};
 
 sub process_source {
 	use Mojo::Util qw(xml_escape);
@@ -388,7 +383,7 @@ helper insert_page_revision => sub {
 
 helper handle_edit_page => sub {
 	my ($c,$src) = @_;
-	my $path = $c->normalize_path;
+	my $path = $c->stash("title");
 	my $preview = $c->param("preview");
 	my $exit = $c->param("exit");
 	if ($preview) { # no save, no redirect
@@ -400,7 +395,7 @@ helper handle_edit_page => sub {
 	return $c->redirect_to($c->url_for("/$path")->query($exit ? 'rev' : 'edit', $time));
 };
 
-post '/*path' => sub {
+post sub {
 	my $c = shift;
 	my $src = $c->param("src");
 	return $c->render('edit', msg => 'Invalid request (CSRF)', src => $src, html => '', status => 403)
@@ -408,7 +403,7 @@ post '/*path' => sub {
 	return $c->render('edit', msg => 'Invadid CAPTCHA', src => $src, html => '', status => 403)
 		unless $c->check_human;
 	return $c->handle_edit_page($src);
-} => 'post';
+};
 
 push @{app->commands->namespaces}, __PACKAGE__;
 

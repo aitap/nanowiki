@@ -26,6 +26,8 @@
   - SELECT snip, time, title FROM pages JOIN (SELECT docid AS idxid, snippet(ftsindex) AS snip FROM ftsindex WHERE src MATCH ?) ON pages.rowid = idxid;
     -- we can't MATCH a JOIN result, therefore we JOIN a MATCH result
 	-- TODO: implement rank() function for rank(matchinfo(ftsindex)) AS rkval and ORDER BY rkval DESC; see rankfunc at http://sqlite.org/fts3.html
-- normalize_path helper is still somewhat ugly => find a way to make sure path is normalized automatically
++ normalize_path helper is still somewhat ugly => find a way to make sure path is normalized automatically
+ + under '/*path' => sub { ... }
+  + for some reason, stashed changes in captured values are not saved between "under sub" and "get sub" => capture "path_", then stash "path"
 - CPANify
 - app->config(defaults => ...) wastes 2048 bits of random data on every launch :(
