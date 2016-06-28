@@ -169,7 +169,7 @@ end;",
 	expires integer not null,
 	answer text not null
 );",
-"insert into sessions_ select id, human, expires, answer from sessions;",
+"insert into sessions_ select id, ifnull(human,0), expires, answer from sessions;",
 "drop table sessions;",
 "alter table sessions_ rename to sessions;",
 "create index sessions_id_expires on sessions (id, expires);",
