@@ -9,11 +9,17 @@ Available commands:
 
 init
 	Write default config file, create the database file and tables
+upgradedb
+	Upgrade the database to match the application schema version.
+maintaindb
+	Run VACUUM, ANALYZE, on the DB; run 'optimize' on FTS table.
+
 delete <page> [page ...]
 	Delete specified pages completely
 rename <from> <to>
 	Move a page from one path to another. Ordinary paths look like
 	"Welcome/subpage/subsubpage".
+
 export <directory>
 	Export the wiki as a series of text files containing Textile
 	source of the articles to the specified directory.
@@ -35,25 +41,42 @@ sub run {
 			close $conf_handle;
 			my $dbh = $self->app->dbh;
 			$dbh->query($_) or die $dbh->error for (
-"create table if not exists pages (
-	title text,
-	who text,
+"create table pages (
+	title text not null,
+	who text not null,
 	src text,
 	html text,
-	time integer,
-	parent text
+	time integer not null,
+	parent text not null,
+	primary key (title, time)
 );",
-"create index if not exists pages_title on pages (title);", # GET /path/to/page
-"create index if not exists pages_title_time on pages (title, time);", # GET /path/to/page?rev=1234
-"create index if not exists pages_parent on pages (parent);", # list of children
-"create table if not exists sessions (
-	id text primary key, -- from Session::Token
-	human bool,
-	expires integer,
-	answer text
+"create index pages_title on pages (title);", # GET /path/to/page
+"create index pages_parent on pages (parent);", # list of children
+"create table sessions (
+	id text primary key not null,
+	human bool not null,
+	expires integer not null,
+	answer text not null
 );",
-"create index if not exists sessions_id_expires on sessions (id, expires);", # look up whether a session is valid
-"create index if not exists sessions_expires on sessions (expires);", # clean up stale sessions
+"create index sessions_id_expires on sessions (id, expires);", # look up whether a session is valid
+"create index sessions_expires on sessions (expires);", # clean up stale sessions
+'create virtual table ftsindex using fts4(content="pages",src,title,tokenize=unicode61)',
+"create trigger pages_before_update before update on pages begin
+	delete from ftsindex where docid=old.rowid;
+end;",
+"create trigger pages_before_delete before delete on pages begin
+	delete from ftsindex where docid=old.rowid;
+end;",
+"create trigger pages_after_update after update on pages begin
+	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title);
+end;",
+"create trigger pages_before_insert before insert on pages begin
+	delete from ftsindex where docid in (select rowid from pages where title=new.title);
+end;",
+"create trigger pages_after_insert after insert on pages begin
+	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title);
+end;",
+"pragma user_version = ".$self->app->schema_version.";"
 			);
 		},
 		delete => sub {
@@ -119,8 +142,92 @@ sub run {
 				print "$time $File::Find::name\n";
 			}, no_chdir => 1}, $dir);
 		},
+		upgradedb => sub {
+			my @upgradefrom = (
+				[
+					# create primary key (title, time) on pages
+					# and add NOT NULL constraints to most columns
+"create table pages_ (
+	title text not null,
+	who text not null,
+	src text,
+	html text,
+	time integer not null,
+	parent text not null,
+	primary key (title, time)
+);",
+"insert into pages_ select * from pages;",
+"drop table pages;",
+"alter table pages_ rename to pages;",
+"create index pages_title on pages (title);",
+"create index pages_parent on pages (parent);",
+					# add NOT NULL to the sessions table
+					# also, get rid of unused "challenge" column for free, if it ever existed
+"create table sessions_ (
+	id text primary key not null,
+	human bool not null,
+	expires integer not null,
+	answer text not null
+);",
+"insert into sessions_ select id, ifnull(human,0), expires, answer from sessions;",
+"drop table sessions;",
+"alter table sessions_ rename to sessions;",
+"create index sessions_id_expires on sessions (id, expires);",
+"create index sessions_expires on sessions (expires);",
+					# create the FTS table
+'create virtual table ftsindex using fts4(content="pages",src,title,tokenize=unicode61)',
+"create trigger pages_before_update before update on pages begin
+	delete from ftsindex where docid=old.rowid;
+end;",
+"create trigger pages_before_delete before delete on pages begin
+	delete from ftsindex where docid=old.rowid;
+end;",
+"create trigger pages_after_update after update on pages begin
+	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title);
+end;",
+"create trigger pages_before_insert before insert on pages begin
+	delete from ftsindex where docid in (select rowid from pages where title=new.title);
+end;",
+"create trigger pages_after_insert after insert on pages begin
+	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title);
+end;",
+"insert into ftsindex(docid,src,title)
+	select p.rowid, p.src, p.title from pages p
+		inner join (select title, max(time) as latest from pages group by title) gp
+		on gp.title == p.title and p.time == gp.latest;", # populate index with latest revisions
+					# last, update the schema version
+"pragma user_version = 1;"
+				],
+			);
+			my $dbh = $self->app->dbh;
+			my $appver = $self->app->schema_version;
+			$dbh->query("pragma user_version;")->into(my $dbver);
+			if ($dbver > $appver) {
+				die "Cannot downgrade database from $dbver to $appver. Please upgrade the application.\n";
+			}
+			while ($appver > $dbver) {
+				print "Upgrading from version $dbver\n";
+				$dbh->begin_work;
+				unless(eval {
+					$dbh->query($_) or die $dbh->error for @{$upgradefrom[$dbver]};
+					1;
+				}) {
+					$dbh->rollback;
+					die;
+				}
+				$dbh->commit;
+				$dbh->query("pragma user_version;")->into($dbver);
+			}
+			print "Application schema version ($appver) matches database version ($dbver)\n";
+		},
 		dump => sub {
 			...;
+		},
+		maintaindb => sub {
+			my $dbh = $self->app->dbh;
+			$dbh->query($_) or die $dbh->error for (
+				"vacuum;", "insert into ftsindex(ftsindex) values ('optimize');", "analyze;"
+			);
 		},
 	);
 	unless (@args and exists $commands{$args[0]}) {
@@ -137,6 +244,7 @@ use Text::Textile 'textile';
 use Scalar::Util 'looks_like_number';
 
 app->attr(conffile => $ENV{NANOWIKI_CONFIG} // "nanowiki.cnf"); # to use it from ::command
+app->attr(schema_version => 1);
 
 my $config = {%{plugin Config => {
 	file => app->conffile, default => {
@@ -158,12 +266,52 @@ $config->{get_captcha} ||= \&get_captcha;
 $config->{check_captcha} ||= \&check_captcha;
 
 helper 'dbh' => sub {
-	return DBIx::Simple::->connect("dbi:SQLite:dbname=".$config->{sqlite_filename},"","",{
+	my $dbh = DBIx::Simple::->connect("dbi:SQLite:dbname=".$config->{sqlite_filename},"","",{
 		sqlite_unicode => 1,
 		AutoCommit => 1,
 		RaiseError => 1,
 	});
+	# ->dbh to get the DBI object
+	$dbh->dbh->sqlite_create_function("searchrank", -1, sub {
+		use List::Util "sum";
+		my ($matchinfo_blob, @weights) = @_;
+		# when called with "pcx" arguments (default), matchinfo returns:
+		# - number of phrases
+		# - number of columns
+		# - {
+		#   - [+0] num(appears here)
+		#   - [+1] sum(appearances): phrase appears in column
+		#   - [+2] num(rows): phrase appears in column
+		#   } per column, then per phrase
+		# = 32-bit unsigned integers in machine byte-order
+		my ($nphrases, $ncols, @matchinfo) = unpack "L*", $matchinfo_blob;
+		# rank = sum { <appears here> / <appears in column> * weight } per phrase per column
+		return sum map {
+			my $phrase = $_;
+			sum map {
+				my $nhits = $matchinfo[3*($phrase*$ncols+$_)];
+				$nhits ? ($nhits / $matchinfo[3*($phrase*$ncols+$_)+1] * $weights[$_]) : ()
+			} (0 .. $ncols)
+		} (0 .. $nphrases-1);
+	});
+	return $dbh;
 };
+
+app->dbh->query("pragma user_version;")->into(my $dbversion);
+if (
+	(($ARGV[0]//"") ne "admincmd")
+	and (
+		my $cmp = ($dbversion <=> app->schema_version) # a complicated way to say !=
+	)
+) {
+	die "Database version ($dbversion) doesn't match the application version (".app->schema_version.").\n"
+	    .(
+			undef, # 0 means equal and shouldn't happen
+			"Unfortunately, database downgrades are not supported. Please upgrade the app ($0).\n", # 1 means that DB is newer than app
+			"Use '$0 admincmd upgradedb' to upgrade the schema. Backup the database (".$config->{sqlite_filename}.") first.\n", # -1 means that DB is older than app
+		)[$cmp];
+}
+
 
 # from Mojolicious::Guides::Tutorial
 helper 'whois' => sub {
@@ -263,7 +411,7 @@ helper captcha_field => sub {
 		'sessions',
 		{
 			id => $id, expires => time + $config->{session_timeout},
-			answer => $answer,
+			answer => $answer, human => 0
 		}
 	) or die $dbh->error;
 	$c->session(id => $id);
@@ -383,6 +531,10 @@ helper insert_page_revision => sub {
 
 helper handle_edit_page => sub {
 	my ($c,$src) = @_;
+	return $c->render('edit', msg => 'Invalid request (CSRF)', src => $src, html => '', status => 403)
+		if $c->validation->csrf_protect->has_error;
+	return $c->render('edit', msg => 'Invadid CAPTCHA', src => $src, html => '', status => 403)
+		unless $c->check_human;
 	my $path = $c->stash("title");
 	my $preview = $c->param("preview");
 	my $exit = $c->param("exit");
@@ -395,13 +547,43 @@ helper handle_edit_page => sub {
 	return $c->redirect_to($c->url_for("/$path")->query($exit ? 'rev' : 'edit', $time));
 };
 
+helper handle_search => sub {
+	my ($c,$search) = @_;
+	my $dbh = $c->dbh;
+	my $results = $dbh->query("
+		select title, snip
+		from pages join
+			(
+				select
+					docid as idxid,
+					snippet(ftsindex) as snip,
+					searchrank(matchinfo(ftsindex,'pcx'),0.5,1.0) as rkval
+				from ftsindex
+				where src match ?
+			)
+			on pages.rowid = idxid
+		order by rkval desc
+		;
+	", $search) or die $dbh->error;
+	# process_source to make sure there are no HTML injections, but keep HTML from SQLite snippet function
+	# of course, the snippet is damaged in process
+	return $c->render('search',
+		results => [ map {
+			$_->[1] = process_source($_->[0],$_->[1]);
+			($_->[2]) = $_->[0] =~ m{([^/]+)$};
+			$_
+		} $results->arrays ],
+		search => $search
+	);
+};
+
 post sub {
 	my $c = shift;
 	my $src = $c->param("src");
-	return $c->render('edit', msg => 'Invalid request (CSRF)', src => $src, html => '', status => 403)
-		if $c->validation->csrf_protect->has_error;
-	return $c->render('edit', msg => 'Invadid CAPTCHA', src => $src, html => '', status => 403)
-		unless $c->check_human;
+	my $search = $c->param("search");
+	if (defined($search)) {
+		return $c->handle_search($search);
+	}
 	return $c->handle_edit_page($src);
 };
 
@@ -413,11 +595,17 @@ __DATA__
 @@ page.html.ep
 % layout 'default';
 % use POSIX 'strftime';
-<div class="children"><ul>
-	<% for (children()) { %>
-		<li><a href="/<%= url_for $_->[1] %>"><%= $_->[0] %></a></li>
-	<% } %>
-</ul></div>
+<div class="children">
+	<ul>
+		<% for (children()) { %>
+			<li><a href="/<%= url_for $_->[1] %>"><%= $_->[0] %></a></li>
+		<% } %>
+	</ul>
+	<form method="post">
+		<input type="submit" value="Search" id="searchbutton">
+		<div id="searchtext"><input type="text" name="search"></div>
+	</form>
+</div>
 <div class="content"><%== $html %></div>
 <div class="footer">
 	<a href="?edit=<%= $time %>">Edit</a>
@@ -462,6 +650,35 @@ __DATA__
 <% } %>
 </table>
 
+@@ search.html.ep
+% layout 'default';
+% use POSIX 'strftime';
+<div class="children">
+	<form method="post">
+		<input type="submit" value="Search" id="searchbutton">
+		<div id="searchtext"><input type="text" name="search" value="<%= $search %>"></div>
+	</form>
+</div>
+<h1>Search results</h1>
+<% if (@$results) { %>
+	<table>
+	<tr>
+		<th>Page</th>
+		<th>Snippet</th>
+	</tr>
+	<% for my $result (@$results) { %>
+		<% my ($path, $snippet, $title) = @$result; %>
+		<tr>
+			<td><a href="/<%= url_for $path %>"><%= $title %></a></td>
+			<td><%== $snippet %></td>
+		</tr>
+	<% } %>
+	</table>
+<% } else { %>
+	<div class="message">Not found</div>
+<% } %>
+The form accepts "ordinary" search engine expressions. Details: <a href="http://sqlite.org/fts3.html#section_3">Full-text Index Queries</a>
+
 @@ exception.production.html.ep
 % layout 'default';
 <h1>Sorry...</h1>
@@ -490,6 +707,15 @@ __DATA__
 				background-color: #eeeeee;
 				margin: 10px;
 				border-radius: 5px;
+			}
+			#searchtext {
+				overflow: hidden;
+			}
+			#searchtext > .input {
+				width: 100%;
+			}
+			#searchbutton {
+				float: right;
 			}
 			.content_block {
 				text-align: justify;
