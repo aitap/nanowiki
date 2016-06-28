@@ -70,6 +70,9 @@ end;",
 "create trigger pages_after_update after update on pages begin
 	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title);
 end;",
+"create trigger pages_before_insert before insert on pages begin
+	delete from ftsindex where docid in (select rowid from pages where title=new.title);
+end;",
 "create trigger pages_after_insert after insert on pages begin
 	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title);
 end;",
@@ -173,11 +176,25 @@ end;",
 "create index sessions_expires on sessions (expires);",
 					# create the FTS table
 'create virtual table ftsindex using fts4(content="pages",src,title,tokenize=unicode61)',
-"create trigger pages_before_update before update on pages begin delete from ftsindex where docid=old.rowid; end;",
-"create trigger pages_before_delete before delete on pages begin delete from ftsindex where docid=old.rowid; end;",
-"create trigger pages_after_update after update on pages begin insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title); end;",
-"create trigger pages_after_insert after insert on pages begin insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title); end;",
-"insert into ftsindex(docid,src,title) select rowid, src, title from pages;", # populate the index
+"create trigger pages_before_update before update on pages begin
+	delete from ftsindex where docid=old.rowid;
+end;",
+"create trigger pages_before_delete before delete on pages begin
+	delete from ftsindex where docid=old.rowid;
+end;",
+"create trigger pages_after_update after update on pages begin
+	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title);
+end;",
+"create trigger pages_before_insert before insert on pages begin
+	delete from ftsindex where docid in (select rowid from pages where title=new.title);
+end;",
+"create trigger pages_after_insert after insert on pages begin
+	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title);
+end;",
+"insert into ftsindex(docid,src,title)
+	select p.rowid, p.src, p.title from pages p
+		inner join (select title, max(time) as latest from pages group by title) gp
+		on gp.title == p.title and p.time == gp.latest;", # populate index with latest revisions
 					# last, update the schema version
 "pragma user_version = 1;"
 				],
@@ -534,7 +551,7 @@ helper handle_search => sub {
 	my ($c,$search) = @_;
 	my $dbh = $c->dbh;
 	my $results = $dbh->query("
-		select snip, time, title
+		select title, snip
 		from pages join
 			(
 				select
@@ -550,7 +567,14 @@ helper handle_search => sub {
 	", $search) or die $dbh->error;
 	# process_source to make sure there are no HTML injections, but keep HTML from SQLite snippet function
 	# of course, the snippet is damaged in process
-	return $c->render('search', results => [ map { $_->[0] = process_source($_->[2],$_->[0]); $_ } $results->arrays ], search => $search);
+	return $c->render('search',
+		results => [ map {
+			$_->[1] = process_source($_->[0],$_->[1]);
+			($_->[2]) = $_->[0] =~ m{([^/]+)$};
+			$_
+		} $results->arrays ],
+		search => $search
+	);
 };
 
 post '/*path' => sub {
@@ -637,14 +661,13 @@ __DATA__
 <table>
 <tr>
 	<th>Page</th>
-	<th>Revision</th>
 	<th>Snippet</th>
 </tr>
 <% for my $result (@$results) { %>
+	<% my ($path, $snippet, $title) = @$result; %>
 	<tr>
-		<td><a href="/<%= url_for($result->[2])->query(rev => $result->[1]) %>"><%= $result->[2] %></a></td>
-		<td><%= strftime "%Y-%m-%d %H:%M:%S" => localtime $result->[1] %></td>
-		<td><%== $result->[0] %></td>
+		<td><a href="/<%= url_for $path %>"><%= $title %></a></td>
+		<td><%== $snippet %></td>
 	</tr>
 <% } %>
 </table>

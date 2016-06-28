@@ -23,7 +23,8 @@
   + SELECT snip, time, title FROM pages JOIN (SELECT docid AS idxid, snippet(ftsindex) AS snip FROM ftsindex WHERE src MATCH ?) ON pages.rowid = idxid;
     -- we can't MATCH a JOIN result, therefore we JOIN a MATCH result
    + implement rank() function for rank(matchinfo(ftsindex)) AS rkval and ORDER BY rkval DESC; see rankfunc at http://sqlite.org/fts3.html
-  - FIXME: searching across all revisions may look ugly, but otherwise revision history is severely crippled. What to do?
+  + searching across all revisions may look ugly, but otherwise revision history is severely crippled. What to do?
+   fixed: only search across latest revisions. if something is OK to be searched for, it should be in the latest revision. if something was removed, it should not be found.
 - normalize_path helper is still somewhat ugly => find a way to make sure path is normalized automatically
 - use EXPLAIN QUERY PLAN to make sure indices are used in every search query
 - CPANify
