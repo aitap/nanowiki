@@ -402,7 +402,7 @@ helper captcha_field => sub {
 		'sessions',
 		{
 			id => $id, expires => time + $config->{session_timeout},
-			answer => $answer,
+			answer => $answer, human => 0
 		}
 	) or die $dbh->error;
 	$c->session(id => $id);
