@@ -6,6 +6,6 @@
 - conflict detection: compare param("edit") (revision being edited) with mtime of last revision and suggest merging
  - this will require Algorithm::Diff and a new template
 - normalize_path helper is still somewhat ugly => find a way to make sure path is normalized automatically
-- use EXPLAIN QUERY PLAN to make sure indices are used in every search query
++ use EXPLAIN QUERY PLAN to make sure indices are used in every search query
 - CPANify
 - app->config(defaults => ...) wastes 2048 bits of random data on every launch :(
