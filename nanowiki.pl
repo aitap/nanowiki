@@ -298,10 +298,15 @@ helper 'dbh' => sub {
 };
 
 app->dbh->query("pragma user_version;")->into(my $dbversion);
-if (my $cmp = ($dbversion <=> app->schema_version)) { # a complicated way to say !=
-	warn "Database version ($dbversion) doesn't match the application version (".app->schema_version.").\n"
+if (
+	(($ARGV[0]//"") ne "admincmd")
+	and (
+		my $cmp = ($dbversion <=> app->schema_version) # a complicated way to say !=
+	)
+) {
+	die "Database version ($dbversion) doesn't match the application version (".app->schema_version.").\n"
 	    .(
-			"", # 0 means equal and shouldn't happen
+			undef, # 0 means equal and shouldn't happen
 			"Unfortunately, database downgrades are not supported. Please upgrade the app ($0).\n", # 1 means that DB is newer than app
 			"Use '$0 admincmd upgradedb' to upgrade the schema. Backup the database (".$config->{sqlite_filename}.") first.\n", # -1 means that DB is older than app
 		)[$cmp];

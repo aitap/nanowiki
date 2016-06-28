@@ -1,5 +1,6 @@
-- FIXME: refuse to start the server if DB versions mismatch but allow admincmds to run
- - die() cripples commands by crashing before them
++ refuse to start the server if DB versions mismatch but allow admincmds to run
+ + die() cripples commands by crashing before them
+  => check if $ARGV[0] is "admincmd" before die'ing
 - refactor:
  ? 'parent' and 'title' regexps are still copypasted across code
 - admincmds
