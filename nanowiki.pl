@@ -658,19 +658,24 @@ __DATA__
 		<div id="searchtext"><input type="text" name="search" value="<%= $search %>"></div>
 	</form>
 </div>
-<table>
-<tr>
-	<th>Page</th>
-	<th>Snippet</th>
-</tr>
-<% for my $result (@$results) { %>
-	<% my ($path, $snippet, $title) = @$result; %>
+<h1>Search results</h1>
+<% if (@$results) { %>
+	<table>
 	<tr>
-		<td><a href="/<%= url_for $path %>"><%= $title %></a></td>
-		<td><%== $snippet %></td>
+		<th>Page</th>
+		<th>Snippet</th>
 	</tr>
+	<% for my $result (@$results) { %>
+		<% my ($path, $snippet, $title) = @$result; %>
+		<tr>
+			<td><a href="/<%= url_for $path %>"><%= $title %></a></td>
+			<td><%== $snippet %></td>
+		</tr>
+	<% } %>
+	</table>
+<% } else { %>
+	<div class="message">Not found</div>
 <% } %>
-</table>
 The form accepts "ordinary" search engine expressions. Details: <a href="http://sqlite.org/fts3.html#section_3">Full-text Index Queries</a>
 
 @@ exception.production.html.ep
