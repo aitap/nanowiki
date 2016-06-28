@@ -27,6 +27,5 @@
     -- we can't MATCH a JOIN result, therefore we JOIN a MATCH result
 	-- TODO: implement rank() function for rank(matchinfo(ftsindex)) AS rkval and ORDER BY rkval DESC; see rankfunc at http://sqlite.org/fts3.html
 - normalize_path helper is still somewhat ugly => find a way to make sure path is normalized automatically
-- use EXPLAIN QUERY PLAN to make sure indices are used in every search query
 - CPANify
 - app->config(defaults => ...) wastes 2048 bits of random data on every launch :(
