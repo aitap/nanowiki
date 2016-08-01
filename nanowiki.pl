@@ -750,6 +750,7 @@ The form accepts "ordinary" search engine expressions. Details: <a href="http://
 		<div class="header"><h1><%= title_from_path() %></h1></div>
 		<div class="content_block">
 			<div class="path_links">
+				<a href="<%= url_for "/" %>">&para;</a>
 				<% for (path_links()) { %>
 					/ <a href="<%= url_for $_->[1] %>"><%= $_->[0] %></a>
 				<% } %>
