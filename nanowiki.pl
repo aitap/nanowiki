@@ -521,7 +521,7 @@ sub process_source {
 helper insert_page_revision => sub {
 	my $c = shift;
 	my ($path, $src, $who) = @_;
-	(my $parent = $path) =~ s{/[^/]+$}{};
+	(my $parent = $path) =~ s{/?[^/]+$}{};
 	my $html = process_source($path,$src);
 	my $time = time;
 	return $c->dbh->insert('pages', { title => $path, who => $who, src => $src, html => $html, time => $time, parent => $parent })
