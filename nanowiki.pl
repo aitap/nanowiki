@@ -198,6 +198,23 @@ end;",
 					# last, update the schema version
 "pragma user_version = 1;"
 				],
+				[
+					# prepare a fix_parent SQL function
+					sub {
+						$_[1]->dbh->sqlite_create_function(
+							"fix_parent", 1,
+							sub {
+								my $ret = $_[0];
+								$ret =~ s{/?[^/]+$}{};
+								return $ret;
+							}
+						);
+					},
+					# actually fix the database
+					"update pages set parent=fix_parent(title);",
+					# don't forget to increment the schema version to show we're done
+					"pragma user_version = 2;"
+				],
 			);
 			my $dbh = $self->app->dbh;
 			my $appver = $self->app->schema_version;
@@ -247,7 +264,7 @@ use Text::Textile 'textile';
 use Scalar::Util 'looks_like_number';
 
 app->attr(conffile => $ENV{NANOWIKI_CONFIG} // "nanowiki.cnf"); # to use it from ::command
-app->attr(schema_version => 1);
+app->attr(schema_version => 2);
 
 my $config = {%{plugin Config => {
 	file => app->conffile, default => {
