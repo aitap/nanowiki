@@ -209,7 +209,10 @@ end;",
 				print "Upgrading from version $dbver\n";
 				$dbh->begin_work;
 				unless(eval {
-					$dbh->query($_) or die $dbh->error for @{$upgradefrom[$dbver]};
+					for (@{$upgradefrom[$dbver]}) {
+						if (ref eq "CODE") { $_->($self,$dbh); }
+						else { $dbh->query($_) or die $dbh->error }
+					}
 					1;
 				}) {
 					$dbh->rollback;
