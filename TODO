@@ -1,5 +1,6 @@
 - refactor:
  ? 'parent' and 'title' regexps are still copypasted across code
+ ! 'parent' regexp: supply an SQL function page_parent, set value automatically on insert/update
 - admincmds
  - dump into single HTML page (regenerated)
   - inter-page links will require special handling; hopefully The Link-Processing Regexp won't need to be copypasted
