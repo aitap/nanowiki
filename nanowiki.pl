@@ -88,7 +88,7 @@ end;",
 		rename => sub {
 			die "Usage: rename <from> <to>\n" unless @_ == 2;
 			my ($from, $to) = map { decode utf8 => $_ } @_;
-			(my $parent = $to) =~ s{/[^/]+$}{}; # FIXME: parent regexp copy-paste
+			(my $parent = $to) =~ s{/?[^/]+$}{}; # FIXME: parent regexp copy-paste
 			say "Updated "
 				.$self->app->dbh->update('pages', { title => $to, parent => $parent }, { title => $from })->rows
 				." rows";
