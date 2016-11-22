@@ -1,7 +1,7 @@
 Assertions:
  - SQLite
   tables without primary key are used
-  fts4 extension is planned to be used
+  fts4 extension is used
  - UTF-8 everywhere, including the filesystem
 
 Config options:
