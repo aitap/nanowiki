@@ -8,14 +8,14 @@ Usage: $0 admincmd <command> [arguments...]
 Available commands:
 
 init
-	Write default config file, create the database file and tables
+	Write default config file, create the database file and tables.
 upgradedb
 	Upgrade the database to match the application schema version.
 maintaindb
 	Run VACUUM, ANALYZE, on the DB; run 'optimize' on FTS table.
 
 delete <page> [page ...]
-	Delete specified pages completely
+	Delete specified pages completely, with its history.
 rename <from> <to>
 	Move a page from one path to another. Ordinary paths look like
 	"Welcome/subpage/subsubpage".
@@ -23,6 +23,9 @@ rename <from> <to>
 export <directory>
 	Export the wiki as a series of text files containing Textile
 	source of the articles to the specified directory.
+
+import <directory>
+	Import the wiki from the directory produced by the "export" command.
 
 Warning: the commands in question are potentially destructive and
 should be used with caution!
