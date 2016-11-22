@@ -304,6 +304,9 @@ if (
 		my $cmp = ($dbversion <=> app->schema_version) # a complicated way to say !=
 	)
 ) {
+	if (! -s $config->{sqlite_filename} ) {
+		die "Database file $config->{sqlite_filename} is empty. Run '$0 admincmd init' to create the config and initialize the DB.\n";
+	}
 	die "Database version ($dbversion) doesn't match the application version (".app->schema_version.").\n"
 	    .(
 			undef, # 0 means equal and shouldn't happen
