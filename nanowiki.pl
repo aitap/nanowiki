@@ -231,8 +231,8 @@ end;",
 						parent text not null,
 						primary key (parent, title, time)
 					);",
-					"insert into pages_(title,parent,src,html,time,who)
-						select new_title(title), new_parent(title), src, html, time, who from pages;",
+					"insert into pages_(rowid,title,parent,src,html,time,who)
+						select rowid, new_title(title), new_parent(title), src, html, time, who from pages;",
 					"drop table pages;",
 					"alter table pages_ rename to pages;",
 					# now I have to recreate all triggers and indices which perished with the old table
