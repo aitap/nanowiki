@@ -51,9 +51,9 @@ sub run {
 	html text,
 	time integer not null,
 	parent text not null,
-	primary key (title, time)
+	primary key (parent, title, time)
 );",
-"create index pages_title on pages (title);", # GET /path/to/page
+"create index pages_parent_title on pages (parent, title);", # GET /parent/title
 "create index pages_parent on pages (parent);", # list of children
 "create table sessions (
 	id text primary key not null,
@@ -64,20 +64,20 @@ sub run {
 "create index sessions_id_expires on sessions (id, expires);", # look up whether a session is valid
 "create index sessions_expires on sessions (expires);", # clean up stale sessions
 'create virtual table ftsindex using fts4(content="pages",src,title,tokenize=unicode61)',
-"create trigger pages_before_update before update on pages begin
-	delete from ftsindex where docid=old.rowid;
-end;",
 "create trigger pages_before_delete before delete on pages begin
 	delete from ftsindex where docid=old.rowid;
 end;",
-"create trigger pages_after_update after update on pages begin
-	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title);
+"create trigger pages_before_update before update on pages begin
+	delete from ftsindex where docid=old.rowid;
 end;",
+"create trigger pages_after_update after update on pages begin
+	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.parent||'/'||new.title);
+end;", # parent||'/'||title doesn't produce valid link in case of empty parent, but links are generated fresh from pages table
 "create trigger pages_before_insert before insert on pages begin
-	delete from ftsindex where docid in (select rowid from pages where title=new.title);
+	delete from ftsindex where docid in (select rowid from pages where title=new.parent||'/'||new.title);
 end;",
 "create trigger pages_after_insert after insert on pages begin
-	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title);
+	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.parent||'/'||new.title);
 end;",
 "pragma user_version = ".$self->app->schema_version.";"
 			);
@@ -90,10 +90,13 @@ end;",
 		},
 		rename => sub {
 			die "Usage: rename <from> <to>\n" unless @_ == 2;
-			my ($from, $to) = map { decode utf8 => $_ } @_;
-			(my $parent = $to) =~ s{/[^/]+$}{}; # FIXME: parent regexp copy-paste
+			my ($from, $to) = map { [ $self->app->split_path(decode utf8 => $_) ] } @_;
 			say "Updated "
-				.$self->app->dbh->update('pages', { title => $to, parent => $parent }, { title => $from })->rows
+				.$self->app->dbh->update(
+					'pages',
+					{ title => $to->[1], parent => $to->[0] },
+					{ parent => $from->[0], title => $from->[1] }
+				)->rows
 				." rows";
 		},
 		export => sub {
@@ -102,7 +105,7 @@ end;",
 			die "Usage: export <directory>\n" unless @_ == 1;
 			my $dbh = $self->app->dbh; # it dies and takes the sth with it otherwise
 			my $result = $dbh->query(
-				"select p.title, p.src, p.time from pages p
+				"select p.parent||'/'||p.title, p.src, p.time from pages p
 				inner join (select title, max(time) as latest from pages group by title) gp
 				on gp.title == p.title and p.time == gp.latest"
 			) or die $dbh->error;
@@ -129,14 +132,21 @@ end;",
 				return unless -f $found and $found =~ /\.txt$/;
 				open my $read, "<:utf8:crlf", $found;
 				$found =~ s{^\Q$dir\E/}{}; $found =~ s/\.txt$//; $found = decode utf8 => $found;
+				my ($parent, $title) = $self->app->split_path($found);
 				my $time = (scalar(<$read>) =~ /^\s*(\d+)/)[0];
 				die "Can't read mtime of $File::Find::name; was the first line damaged?\n" unless $time;
-				if (($dbh->query("select count(time) from pages where time > (?+0) and title = ?",$time, $found)->flat)[0]) {
+				if (($dbh->query(
+					"select count(time) from pages where time > (?+0) and parent = ? and title = ?",
+					$time, $parent, $title
+				)->flat)[0]) {
 					warn "$time $File::Find::name -- not importing because there are newer edits\n";
 					return;
 				}
 				my $src = do { local $/; <$read> };
-				if (($dbh->query("select count(time) from pages where time = (?+0) and src = ? and title = ?", $time, $src, $found)->flat)[0]) {
+				if (($dbh->query(
+					"select count(time) from pages where time = (?+0) and src = ? and parent = ? and title = ?",
+					$time, $src, $parent, $title
+				)->flat)[0]) {
 					print "$time $File::Find::name -- unchanged\n";
 					return;
 				}
@@ -198,8 +208,54 @@ end;",
 	select p.rowid, p.src, p.title from pages p
 		inner join (select title, max(time) as latest from pages group by title) gp
 		on gp.title == p.title and p.time == gp.latest;", # populate index with latest revisions
-					# last, update the schema version
-"pragma user_version = 1;"
+				],
+				[
+					sub {
+						$_[1]->dbh->sqlite_create_function(
+							"new_parent", 1,
+							sub {
+								my ($parent) = $_[0] =~ m{^(.*)/};
+								return $parent // "";
+							}
+						);
+						$_[1]->dbh->sqlite_create_function(
+							"new_title", 1, sub {
+								my ($title) = $_[0] =~ m{([^/]+)$};
+								return $title;
+							}
+						);
+					},
+					"create table pages_ (
+						title text not null,
+						who text not null,
+						src text,
+						html text,
+						time integer not null,
+						parent text not null,
+						primary key (parent, title, time)
+					);",
+					"insert into pages_(rowid,title,parent,src,html,time,who)
+						select rowid, new_title(title), new_parent(title), src, html, time, who from pages;",
+					"drop table pages;",
+					"alter table pages_ rename to pages;",
+					# now I have to recreate all triggers and indices which perished with the old table
+					"create index pages_parent_title on pages (parent, title);",
+					"create index pages_parent on pages (parent);",
+					"create trigger pages_before_delete before delete on pages begin
+						delete from ftsindex where docid=old.rowid;
+					end;",
+					"create trigger pages_before_update before update on pages begin
+						delete from ftsindex where docid=old.rowid;
+					end;",
+					"create trigger pages_after_update after update on pages begin
+						insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.parent||'/'||new.title);
+					end;",
+					"create trigger pages_before_insert before insert on pages begin
+						delete from ftsindex where docid in (select rowid from pages where title=new.parent||'/'||new.title);
+					end;",
+					"create trigger pages_after_insert after insert on pages begin
+						insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.parent||'/'||new.title);
+					end;",
 				],
 			);
 			my $dbh = $self->app->dbh;
@@ -212,19 +268,20 @@ end;",
 				print "Upgrading from version $dbver\n";
 				$dbh->begin_work;
 				unless(eval {
-					$dbh->query($_) or die $dbh->error for @{$upgradefrom[$dbver]};
+					for (@{$upgradefrom[$dbver]}) {
+						if (ref eq "CODE") { $_->($self,$dbh); }
+						else { $dbh->query($_) or die $dbh->error }
+					}
 					1;
 				}) {
 					$dbh->rollback;
 					die;
 				}
 				$dbh->commit;
-				$dbh->query("pragma user_version;")->into($dbver);
+				$dbver++;
 			}
-			print "Application schema version ($appver) matches database version ($dbver)\n";
-		},
-		dump => sub {
-			...;
+			$dbh->query("pragma user_version = $appver;");
+			print "Database schema upgraded to version $appver.\n";
 		},
 		maintaindb => sub {
 			my $dbh = $self->app->dbh;
@@ -247,7 +304,7 @@ use Text::Textile 'textile';
 use Scalar::Util 'looks_like_number';
 
 app->attr(conffile => $ENV{NANOWIKI_CONFIG} // "nanowiki.cnf"); # to use it from ::command
-app->attr(schema_version => 1);
+app->attr(schema_version => 2);
 
 my $config = {%{plugin Config => {
 	file => app->conffile, default => {
@@ -319,42 +376,6 @@ if (
 }
 
 
-# from Mojolicious::Guides::Tutorial
-helper 'whois' => sub {
-	my $c     = shift;
-	my $agent = $c->req->headers->user_agent || 'empty User-Agent';
-	my $ip    = $c->tx->remote_address;
-	return "$agent ($ip)";
-};
-
-helper 'path_links' => sub { # transform /A/B/C from stash into series of links to /A, /A/B, /A/B/C
-	my $c = shift;
-	my $path = $c->stash("title");
-	# split path into parts to linkify them in the template
-	my @pathspec = map { [ $_ ] } split /\//, $path;
-	$pathspec[0][1] = "/$pathspec[0][0]";
-	$pathspec[$_][1] = "$pathspec[$_-1][1]/$pathspec[$_][0]" for 1..$#pathspec;
-	return @pathspec;
-};
-
-helper 'title_from_path' => sub { # stash: /A/B/C -> C
-	my $c = shift;
-	my ($title) = $c->stash("title") =~ m{([^/]+)$};
-	return $title;
-};
-
-helper children => sub { # all pages which have current as their parent
-	my $c = shift;
-	my $dbh = $c->dbh;
-	return
-		map {
-			my ($title) = m{([^/]+)$};
-			[ $title, $_ ]
-		}
-		$dbh->query("select distinct(title) from pages where parent = ?", $c->stash("title"))->flat
-		;
-};
-
 sub get_captcha {
 	my @operands = qw(- + / *);
 	my $challenge = int rand 20;
@@ -424,6 +445,19 @@ helper captcha_field => sub {
 	return Mojo::ByteStream::->new(qq{$challenge = <input name="captcha" type="text" required>});
 };
 
+helper split_path => sub {
+	my ($c, $path) = @_;
+	my ($parent) = $path =~ m{^(.*)/};
+	$parent //= "";
+	my ($name) = $path =~ m{([^/]+)$};
+	return ($parent, $name);
+};
+
+helper join_path => sub {
+	my ($c, $parent, $title) = @_;
+	return $parent.($parent ? "/" : "").$title;
+};
+
 under '/*path_' => {path_ => $config->{root_page}} => sub {
 	my $c = shift;
 	# normalize path
@@ -434,18 +468,40 @@ under '/*path_' => {path_ => $config->{root_page}} => sub {
 	$path =~ s{[^/]*/\.\./}{}g;
 	# / in the end should also be sanitized
 	$path =~ s{/$}{};
-	$c->stash("title" => $path);
+	my ($parent, $name) = $c->split_path($path);
+	$c->stash(parent => $parent, title => $name, fullpath => $path);
 	return 1;
 };
 
+helper 'path_links' => sub { # transform A/B/C from stash into series of links to /A, /A/B, /A/B/C
+	my $c = shift;
+	my $path = $c->stash("fullpath");
+	# split path into parts to linkify them in the template
+	my @pathspec = map { [ $_ ] } split /\//, $path;
+	$pathspec[0][1] = "/$pathspec[0][0]";
+	$pathspec[$_][1] = "$pathspec[$_-1][1]/$pathspec[$_][0]" for 1..$#pathspec;
+	return @pathspec;
+};
+
+helper children => sub { # all pages which have current as their parent
+	my $c = shift;
+	my $dbh = $c->dbh;
+	return
+		map {
+			[ $_->[1], $c->join_path($_->[0],$_->[1]) ]
+		}
+		$dbh->query("select DISTINCT parent, title from pages where parent = ?", $c->stash("fullpath"))->arrays
+		;
+};
+
 helper 'render_edit_form' => sub {
-	my ($c,$edit,$path) = @_;
+	my ($c,$edit,$parent,$title) = @_;
 	my $dbh = $c->dbh;
 	$dbh
 		->query(
-			$edit ? 'select html, src from pages where title = ? and time = (0+?) order by time desc limit 1'
-			      : 'select html, src from pages where title = ? order by time desc limit 1',
-			$path,
+			$edit ? 'select html, src from pages where parent = ? and title = ? and time = (0+?) order by time desc limit 1'
+			      : 'select html, src from pages where parent = ? and title = ? order by time desc limit 1',
+			$parent, $title,
 			$edit || ()
 		)->into(my($html, $src))
 		or return $c->render('edit', html => '', src => '', msg => 'Page/revision not found', status => 404);
@@ -453,23 +509,23 @@ helper 'render_edit_form' => sub {
 };
 
 helper 'render_page' => sub {
-	my ($c, $path, $rev) = @_;
+	my ($c, $parent, $title, $rev) = @_;
 	my $dbh = $c->dbh;
 	$dbh
 		->query(
-			defined($rev) ? 'select who, html, time from pages where title = ? and time = (0+?)'
-			              : 'select who, html, time from pages where title = ? order by time desc limit 1',
-			$path, $rev // ()
+			defined($rev) ? 'select who, html, time from pages where parent = ? and title = ? and time = (0+?)'
+			              : 'select who, html, time from pages where parent = ? and title = ? order by time desc limit 1',
+			$parent, $title, $rev // ()
 		)->into(my($who, $html, $time))
 		or return $c->render('edit', msg => 'Page/revision not found, create one?', src => '', html => '', status => 404);
 	return $c->render('page', html => $html, who => $who, time => $time);
 };
 
 helper 'render_list_revisions' => sub {
-	my ($c, $path) = @_;
+	my ($c, $parent, $title) = @_;
 	my $dbh = $c->dbh;
 	my @history = $dbh
-		->select('pages', [qw/time who/], { title => $path }, { -desc => 'time' })
+		->select('pages', [qw/time who/], { parent => $parent, title => $title }, { -desc => 'time' })
 		->arrays;
 	return $c->render('edit', msg => 'Page not found', src => '', html => '', status => 404)
 		unless @history;
@@ -478,21 +534,22 @@ helper 'render_list_revisions' => sub {
 
 get sub {
 	my $c = shift;
-	my $path = $c->stash("title");
+	my $parent = $c->stash("parent");
+	my $title = $c->stash("title");
 	my $edit = $c->param('edit');
 	my $rev = $c->param('rev');
 	my $dbh = $c->dbh;
 	if (defined($edit)) { # show edit form
-		return $c->render_edit_form($edit, $path);
+		return $c->render_edit_form($edit, $parent, $title);
 	} elsif (defined($rev)) {
 		# list revisions or select a specific one
 		if ($rev and looks_like_number($rev)) { # 0 and '' are not valid revisions
-			return $c->render_page($path,$rev);
+			return $c->render_page($parent,$title,$rev);
 		} else { # asked for list of revisions
-			return $c->render_list_revisions($path);
+			return $c->render_list_revisions($parent,$title);
 		}
 	} else { # just plain view last revision
-		return $c->render_page($path);
+		return $c->render_page($parent,$title);
 	}
 };
 
@@ -526,13 +583,20 @@ sub process_source {
 
 helper insert_page_revision => sub {
 	my $c = shift;
-	my ($path, $src, $who) = @_;
-	(my $parent = $path) =~ s{/[^/]+$}{};
+	my ($path, $parent, $title, $src, $who) = @_;
 	my $html = process_source($path,$src);
 	my $time = time;
-	return $c->dbh->insert('pages', { title => $path, who => $who, src => $src, html => $html, time => $time, parent => $parent })
+	return $c->dbh->insert('pages', { title => $title, who => $who, src => $src, html => $html, time => $time, parent => $parent })
 		? $time
 		: 0;
+};
+
+# from Mojolicious::Guides::Tutorial
+helper 'whois' => sub {
+	my $c     = shift;
+	my $agent = $c->req->headers->user_agent || 'empty User-Agent';
+	my $ip    = $c->tx->remote_address;
+	return "$agent ($ip)";
 };
 
 helper handle_edit_page => sub {
@@ -541,23 +605,25 @@ helper handle_edit_page => sub {
 		if $c->validation->csrf_protect->has_error;
 	return $c->render('edit', msg => 'Invadid CAPTCHA', src => $src, html => '', status => 403)
 		unless $c->check_human;
-	my $path = $c->stash("title");
+	my $fullpath = $c->stash("fullpath");
+	my $title = $c->stash("title");
+	my $parent = $c->stash("parent");
 	my $preview = $c->param("preview");
 	my $exit = $c->param("exit");
 	if ($preview) { # no save, no redirect
-		return $c->render('edit', html => process_source($path,$src), src => $src, msg => "Preview mode");
+		return $c->render('edit', html => process_source($fullpath,$src), src => $src, msg => "Preview mode");
 	}
 	# else save the data and decide where to redirect
-	my $time = $c->insert_page_revision($path, $src, $c->whois)
-		or return $c->render('edit', html => process_source($path,$src), src => $src, msg => "Database returned error, please retry", status => 500);
-	return $c->redirect_to($c->url_for("/$path")->query($exit ? 'rev' : 'edit', $time));
+	my $time = $c->insert_page_revision($fullpath, $parent, $title, $src, $c->whois)
+		or return $c->render('edit', html => process_source($fullpath,$src), src => $src, msg => "Database returned error, please retry", status => 500);
+	return $c->redirect_to($c->url_for("/$fullpath")->query($exit ? 'rev' : 'edit', $time));
 };
 
 helper handle_search => sub {
 	my ($c,$search) = @_;
 	my $dbh = $c->dbh;
 	my $results = $dbh->query("
-		select title, snip
+		select parent, title, snip
 		from pages join
 			(
 				select
@@ -575,9 +641,10 @@ helper handle_search => sub {
 	# of course, the snippet is damaged in process
 	return $c->render('search',
 		results => [ map {
-			$_->[1] = process_source($_->[0],$_->[1]);
-			($_->[2]) = $_->[0] =~ m{([^/]+)$};
-			$_
+			my $fullpath = $c->join_path($_->[0],$_->[1]);
+			my $src = process_source($fullpath,$_->[2]);
+			my $title = $_->[1];
+			[ $fullpath, $src, $title ]
 		} $results->arrays ],
 		search => $search
 	);
@@ -702,7 +769,7 @@ The form accepts "ordinary" search engine expressions. Details: <a href="http://
 <!DOCTYPE html>
 <html>
 	<head>
-		<title><%= title_from_path() %></title>
+		<title><%= $title %></title>
 		<style type="text/css">
 			.header {
 				text-align: center;
@@ -753,7 +820,7 @@ The form accepts "ordinary" search engine expressions. Details: <a href="http://
 		</style>
 	</head>
 	<body>
-		<div class="header"><h1><%= title_from_path() %></h1></div>
+		<div class="header"><h1><%= $title %></h1></div>
 		<div class="content_block">
 			<div class="path_links">
 				<a href="<%= url_for "/" %>">&para;</a>
