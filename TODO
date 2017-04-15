@@ -1,3 +1,4 @@
+- "print version" of the page / CSS to help print renderer ignore the navigation?
 - admincmds
  - dump into single HTML page (regenerated)
   - inter-page links will require special handling; hopefully The Link-Processing Regexp won't need to be copypasted
