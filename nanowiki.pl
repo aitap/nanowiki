@@ -825,7 +825,7 @@ The form accepts "ordinary" search engine expressions. Details: <a href="http://
 		</style>
 	</head>
 	<body>
-		<div class="header no-print"><h1><%= $title %></h1></div>
+		<div class="header"><h1><%= $title %></h1></div>
 		<div class="content_block">
 			<div class="path_links no-print">
 				<a href="<%= url_for "/" %>">&para;</a>
