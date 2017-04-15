@@ -668,7 +668,7 @@ __DATA__
 @@ page.html.ep
 % layout 'default';
 % use POSIX 'strftime';
-<div class="children">
+<div class="children no-print">
 	<ul>
 		<% for (children()) { %>
 			<li><a href="/<%= url_for $_->[1] %>"><%= $_->[0] %></a></li>
@@ -680,7 +680,7 @@ __DATA__
 	</form>
 </div>
 <div class="content"><%== $html %></div>
-<div class="footer">
+<div class="footer no-print">
 	<a href="?edit=<%= $time %>">Edit</a>
 	Revision <a href="?rev"><%= strftime "%Y-%m-%d %H:%M:%S" => localtime $time %></a> by <i><%= $who %></i>.
 </div>
@@ -771,6 +771,11 @@ The form accepts "ordinary" search engine expressions. Details: <a href="http://
 	<head>
 		<title><%= $title %></title>
 		<style type="text/css">
+			@media print {
+				.no-print, .no-print * {
+					display: none !important;
+				}
+			}
 			.header {
 				text-align: center;
 			}
@@ -820,9 +825,9 @@ The form accepts "ordinary" search engine expressions. Details: <a href="http://
 		</style>
 	</head>
 	<body>
-		<div class="header"><h1><%= $title %></h1></div>
+		<div class="header no-print"><h1><%= $title %></h1></div>
 		<div class="content_block">
-			<div class="path_links">
+			<div class="path_links no-print">
 				<a href="<%= url_for "/" %>">&para;</a>
 				<% for (path_links()) { %>
 					/ <a href="<%= url_for $_->[1] %>"><%= $_->[0] %></a>
