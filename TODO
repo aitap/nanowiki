@@ -1,4 +1,4 @@
-+ special "print version" of the page?
+- drop the "filesystem is UTF-8" assumption and use Encode::Locale or something for filenames when exporting/importing
 - admincmds
  - dump into single HTML page (regenerated)
   - inter-page links will require special handling; hopefully The Link-Processing Regexp won't need to be copypasted
