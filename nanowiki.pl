@@ -378,8 +378,7 @@ if (
 
 sub get_captcha {
 	my @operands = qw(- + / *);
-	my $challenge = int rand 20;
-	$challenge .= " ".$operands[int rand @operands]." ".(int(rand 20)+1) for 1..2;
+	my $challenge = (int rand 20) . " " . $operands[int rand @operands] . " " . (int(rand 20)+1);
 	my $answer = eval $challenge; # string eval! shock, horrors!
 	my %digits = map {
 		my $dig = $_;
