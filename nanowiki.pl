@@ -768,6 +768,7 @@ The form accepts "ordinary" search engine expressions. Details: <a href="http://
 <!DOCTYPE html>
 <html>
 	<head>
+		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 		<title><%= $title %></title>
 		<style type="text/css">
 			@media print {
@@ -780,7 +781,7 @@ The form accepts "ordinary" search engine expressions. Details: <a href="http://
 			}
 			.children {
 				float: right;
-				width: 18%;
+				width: 20ex;
 				background-color: #eeeeee;
 				margin: 10px;
 				border-radius: 5px;
