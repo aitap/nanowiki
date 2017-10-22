@@ -84,14 +84,14 @@ end;",
 			);
 		},
 		delete => sub {
-			'Encode::Locale'->use;
+			'Encode::Locale'->use or die $@;
 			return unless @_; # delete from pages; -- haha
 			say "Deleted "
 				.$self->app->dbh->delete('pages', { title => { '=' , [ map { decode locale => $_ } @_ ] } })->rows
 				." rows";
 		},
 		rename => sub {
-			'Encode::Locale'->use;
+			'Encode::Locale'->use or die $@;
 			die "Usage: rename <from> <to>\n" unless @_ == 2;
 			my ($from, $to) = map { [ $self->app->split_path(decode locale => $_) ] } @_;
 			say "Updated "
@@ -103,7 +103,7 @@ end;",
 				." rows";
 		},
 		export => sub {
-			'Encode::Locale'->use;
+			'Encode::Locale'->use or die $@;
 			use autodie; # chdir, open, close, print...
 			use File::Path 'make_path';
 			die "Usage: export <directory>\n" unless @_ == 1;
@@ -125,7 +125,7 @@ end;",
 			}
 		},
 		import => sub {
-			'Encode::Locale'->use;
+			'Encode::Locale'->use or die $@;
 			use autodie; # open, readline...
 			use File::Find 'find';
 			die "Usage: import <directory>\n" unless @_ == 1 and -d $_[0];
