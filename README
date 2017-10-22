@@ -14,6 +14,8 @@ Config options:
  - preprocess_src: subroutine which accepts the source of wiki article,
   prior to any (wikilink or textile) processing. Should return the processed
   source of wiki article.
+ - password: if defined, both read and write access to the wiki would require
+  entering this password first (captcha is disabled)
 
 Example preprocess_src: uses "mimetex" program to generate inline images of LaTeX formulae
 	"preprocess_src" => sub {
