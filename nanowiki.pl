@@ -1,5 +1,6 @@
 #!/usr/bin/env perl
 package App::NanoWiki::admincmd;
+use UNIVERSAL::require;
 use Mojo::Base 'Mojolicious::Command';
 has description => 'Administrative commands for NanoWiki';
 has usage => <<EOM;
@@ -83,14 +84,16 @@ end;",
 			);
 		},
 		delete => sub {
+			'Encode::Locale'->use;
 			return unless @_; # delete from pages; -- haha
 			say "Deleted "
-				.$self->app->dbh->delete('pages', { title => { '=' , [ map { decode utf8 => $_ } @_ ] } })->rows
+				.$self->app->dbh->delete('pages', { title => { '=' , [ map { decode locale => $_ } @_ ] } })->rows
 				." rows";
 		},
 		rename => sub {
+			'Encode::Locale'->use;
 			die "Usage: rename <from> <to>\n" unless @_ == 2;
-			my ($from, $to) = map { [ $self->app->split_path(decode utf8 => $_) ] } @_;
+			my ($from, $to) = map { [ $self->app->split_path(decode locale => $_) ] } @_;
 			say "Updated "
 				.$self->app->dbh->update(
 					'pages',
@@ -100,6 +103,7 @@ end;",
 				." rows";
 		},
 		export => sub {
+			'Encode::Locale'->use;
 			use autodie; # chdir, open, close, print...
 			use File::Path 'make_path';
 			die "Usage: export <directory>\n" unless @_ == 1;
@@ -111,16 +115,17 @@ end;",
 			) or die $dbh->error;
 			while (my $row = $result->array) {
 				my ($title, $text, $time) = @$row;
-				$title = encode utf8 => "$_[0]/$title.txt";
+				$title = "$_[0]/$title.txt";
 				(my $dirname = $title) =~ s{/[^/]+$}{};
-				make_path $dirname;
-				open my $write, ">:utf8:crlf", $title;
+				make_path encode locale_fs => $dirname;
+				open my $write, ">:utf8:crlf", encode locale_fs => $title;
 				print $write "$time # revision ".scalar(localtime $time)." -- please do not touch this line\n";
 				print $write $text;
-				print "$time $title\n";
+				print encode locale => "$time $title\n";
 			}
 		},
 		import => sub {
+			'Encode::Locale'->use;
 			use autodie; # open, readline...
 			use File::Find 'find';
 			die "Usage: import <directory>\n" unless @_ == 1 and -d $_[0];
@@ -131,15 +136,16 @@ end;",
 				# we only care about *.txt files
 				return unless -f $found and $found =~ /\.txt$/;
 				open my $read, "<:utf8:crlf", $found;
-				$found =~ s{^\Q$dir\E/}{}; $found =~ s/\.txt$//; $found = decode utf8 => $found;
+				$found = decode locale_fs => $found; $found =~ s{^\Q$dir\E/}{}; $found =~ s/\.txt$//;
+				$File::Find::name = decode locale_fs => $File::Find::name;
 				my ($parent, $title) = $self->app->split_path($found);
 				my $time = (scalar(<$read>) =~ /^\s*(\d+)/)[0];
-				die "Can't read mtime of $File::Find::name; was the first line damaged?\n" unless $time;
+				die encode locale => "Can't read article-last-modified time of $File::Find::name; was the first line damaged?\n" unless $time;
 				if (($dbh->query(
 					"select count(time) from pages where time > (?+0) and parent = ? and title = ?",
 					$time, $parent, $title
 				)->flat)[0]) {
-					warn "$time $File::Find::name -- not importing because there are newer edits\n";
+					warn encode locale => "$time $File::Find::name -- not importing because there are newer edits\n";
 					return;
 				}
 				my $src = do { local $/; <$read> };
@@ -147,12 +153,12 @@ end;",
 					"select count(time) from pages where time = (?+0) and src = ? and parent = ? and title = ?",
 					$time, $src, $parent, $title
 				)->flat)[0]) {
-					print "$time $File::Find::name -- unchanged\n";
+					print encode locale => "$time $File::Find::name -- unchanged\n";
 					return;
 				}
 				$self->app->insert_page_revision($found,$src,"local import")
-					or die "$time $File::Find::name ".$dbh->error;
-				print "$time $File::Find::name\n";
+					or die encode locale => "$time $File::Find::name ".$dbh->error."\n";
+				print encode locale => "$time $File::Find::name\n";
 			}, no_chdir => 1}, $dir);
 		},
 		upgradedb => sub {
@@ -299,6 +305,7 @@ end;",
 package App::NanoWiki;
 use Mojolicious::Lite;
 use DBIx::Simple;
+use SQL::Abstract; # I don't use it directly but it helps to expilictly depend on it
 use Session::Token;
 use Text::Textile 'textile';
 use Scalar::Util 'looks_like_number';
