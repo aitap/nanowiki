@@ -1,5 +1,6 @@
 #!/usr/bin/env perl
 package App::NanoWiki::admincmd;
+use UNIVERSAL::require;
 use Mojo::Base 'Mojolicious::Command';
 has description => 'Administrative commands for NanoWiki';
 has usage => <<EOM;
@@ -100,6 +101,7 @@ end;",
 				." rows";
 		},
 		export => sub {
+			'Encode::Locale'->use;
 			use autodie; # chdir, open, close, print...
 			use File::Path 'make_path';
 			die "Usage: export <directory>\n" unless @_ == 1;
@@ -111,7 +113,7 @@ end;",
 			) or die $dbh->error;
 			while (my $row = $result->array) {
 				my ($title, $text, $time) = @$row;
-				$title = encode utf8 => "$_[0]/$title.txt";
+				$title = encode locale_fs => "$_[0]/$title.txt";
 				(my $dirname = $title) =~ s{/[^/]+$}{};
 				make_path $dirname;
 				open my $write, ">:utf8:crlf", $title;
@@ -121,6 +123,7 @@ end;",
 			}
 		},
 		import => sub {
+			'Encode::Locale'->use;
 			use autodie; # open, readline...
 			use File::Find 'find';
 			die "Usage: import <directory>\n" unless @_ == 1 and -d $_[0];
@@ -131,10 +134,10 @@ end;",
 				# we only care about *.txt files
 				return unless -f $found and $found =~ /\.txt$/;
 				open my $read, "<:utf8:crlf", $found;
-				$found =~ s{^\Q$dir\E/}{}; $found =~ s/\.txt$//; $found = decode utf8 => $found;
+				$found =~ s{^\Q$dir\E/}{}; $found =~ s/\.txt$//; $found = decode locale_fs => $found;
 				my ($parent, $title) = $self->app->split_path($found);
 				my $time = (scalar(<$read>) =~ /^\s*(\d+)/)[0];
-				die "Can't read mtime of $File::Find::name; was the first line damaged?\n" unless $time;
+				die "Can't read article-last-modified time of $File::Find::name; was the first line damaged?\n" unless $time;
 				if (($dbh->query(
 					"select count(time) from pages where time > (?+0) and parent = ? and title = ?",
 					$time, $parent, $title
@@ -299,6 +302,7 @@ end;",
 package App::NanoWiki;
 use Mojolicious::Lite;
 use DBIx::Simple;
+use SQL::Abstract; # I don't use it directly but it helps to expilictly depend on it
 use Session::Token;
 use Text::Textile 'textile';
 use Scalar::Util 'looks_like_number';
