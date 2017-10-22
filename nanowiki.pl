@@ -589,9 +589,10 @@ sub process_source {
 
 helper insert_page_revision => sub {
 	my $c = shift;
-	my ($path, $parent, $title, $src, $who) = @_;
+	my ($path, $parent, $title, $src, $who, $dbh) = @_;
 	my $html = process_source($path,$src);
 	my $time = time;
+	$dbh //= $c->dbh;
 	return $c->dbh->insert('pages', { title => $title, who => $who, src => $src, html => $html, time => $time, parent => $parent })
 		? $time
 		: 0;
@@ -619,10 +620,25 @@ helper handle_edit_page => sub {
 	if ($preview) { # no save, no redirect
 		return $c->render('edit', html => process_source($fullpath,$src), src => $src, msg => "Preview mode");
 	}
-	# else save the data and decide where to redirect
-	my $time = $c->insert_page_revision($fullpath, $parent, $title, $src, $c->whois)
-		or return $c->render('edit', html => process_source($fullpath,$src), src => $src, msg => "Database returned error, please retry", status => 500);
-	return $c->redirect_to($c->url_for("/$fullpath")->query($exit ? 'rev' : 'edit', $time));
+	# okay, this might be tricky
+	# just as we decided there aren't any newer page revisions, someone else might come here and insert one!
+	# we use a transaction to prevent that (which means database is locked and everyone else has to wait, I guess)
+	my $dbh = $c->dbh;
+	$dbh->begin_work;
+	my $latest_time = $c->param("rev");
+	$dbh->select("pages", 'max(time)', { time => { '>', $latest_time } })->into(my $newer);
+	if (!defined($newer)) {
+		# save the data and decide where to redirect
+		my $time = $c->insert_page_revision($fullpath, $parent, $title, $src, $c->whois, $dbh);
+		$dbh->commit;
+		# someone could add a page just as we are redirecting to this particular one, but they would have to take this page into account
+		return $time ? $c->redirect_to($c->url_for("/$fullpath")->query($exit ? 'rev' : 'edit', $time))
+			: $c->render('edit', html => process_source($fullpath,$src), src => $src, msg => "Database returned error, please retry", status => 500)
+	} else {
+		# get this page, prepare a diff to be rendered
+		...;
+		$dbh->rollback; # although there's nothing to roll back
+	}
 };
 
 helper handle_search => sub {
