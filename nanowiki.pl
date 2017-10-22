@@ -667,7 +667,7 @@ __DATA__
 @@ page.html.ep
 % layout 'default';
 % use POSIX 'strftime';
-<div class="children no-print">
+<nav class="children no-print">
 	<ul>
 		<% for (children()) { %>
 			<li><a href="/<%= url_for $_->[1] %>"><%= $_->[0] %></a></li>
@@ -677,12 +677,12 @@ __DATA__
 		<input type="submit" value="Search" id="searchbutton">
 		<div id="searchtext"><input type="text" name="search"></div>
 	</form>
-</div>
-<div class="content"><%== $html %></div>
-<div class="footer no-print">
+</nav>
+<article><%== $html %></article>
+<footer class="no-print">
 	<a href="?edit=<%= $time %>">Edit</a>
 	Revision <a href="?rev"><%= strftime "%Y-%m-%d %H:%M:%S" => localtime $time %></a> by <i><%= $who %></i>.
-</div>
+</footer>
 
 @@ edit.html.ep
 % layout 'default';
@@ -776,7 +776,7 @@ The form accepts "ordinary" search engine expressions. Details: <a href="http://
 					display: none !important;
 				}
 			}
-			.header {
+			header {
 				text-align: center;
 			}
 			.children {
@@ -799,7 +799,7 @@ The form accepts "ordinary" search engine expressions. Details: <a href="http://
 				text-align: justify;
 				margin: 5px;
 			}
-			.path_links, .footer {
+			.path_links, footer {
 				border: 1px solid black;
 			}
 			.edit_container {
@@ -825,14 +825,14 @@ The form accepts "ordinary" search engine expressions. Details: <a href="http://
 		</style>
 	</head>
 	<body>
-		<div class="header"><h1><%= $title %></h1></div>
+		<header><h1><%= $title %></h1></header>
 		<div class="content_block">
-			<div class="path_links no-print">
+			<nav class="path_links no-print">
 				<a href="<%= url_for "/" %>">&para;</a>
 				<% for (path_links()) { %>
 					/ <a href="<%= url_for $_->[1] %>"><%= $_->[0] %></a>
 				<% } %>
-			</div>
+			</nav>
 			<%= content %>
 		</div>
   </body>

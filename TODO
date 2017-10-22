@@ -1,6 +1,5 @@
 - make the layout behave better on mobile
  - maybe potition the textarea vertically and ask it to occupy 100% width and some em height?
- - HTML5ize the wiki while I'm at it, employ header/article/footer/nav tags
 - optional password protection
  (because it's fast and convinient if not very secure to share a single password between a small group of people)
 - drop the "filesystem is UTF-8" assumption and use Encode::Locale or something for filenames when exporting/importing
