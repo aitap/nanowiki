@@ -265,6 +265,7 @@ end;",
 				],
 			);
 			my $dbh = $self->app->dbh;
+			$dbh->dbh->sqlite_backup_to_file($self->app->config->{sqlite_filename} . ".backup." . time());
 			my $appver = $self->app->schema_version;
 			$dbh->query("pragma user_version;")->into(my $dbver);
 			if ($dbver > $appver) {
