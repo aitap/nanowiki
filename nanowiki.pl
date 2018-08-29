@@ -778,59 +778,7 @@ The form accepts "ordinary" search engine expressions. Details: <a href="http://
 	<head>
 		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 		<title><%= $title %></title>
-		<style type="text/css">
-			@media print {
-				.no-print, .no-print * {
-					display: none !important;
-				}
-			}
-			header {
-				text-align: center;
-			}
-			.children {
-				float: right;
-				width: 20ex;
-				background-color: #eeeeee;
-				margin: 10px;
-				border-radius: 5px;
-			}
-			#searchtext {
-				overflow: hidden;
-			}
-			#searchtext > .input {
-				width: 100%;
-			}
-			#searchbutton {
-				float: right;
-			}
-			.content_block {
-				text-align: justify;
-				margin: 5px;
-			}
-			.path_links, footer {
-				border: 1px solid black;
-			}
-			.edit_container {
-				display: block;
-				overflow: auto;
-				width: 100%;
-			}
-			.textarea, .preview {
-				width: 49%;
-				float: left;
-				height: 100%;
-			}
-			textarea {
-				width: 95%;
-				height: 100%;
-			}
-			.message {
-				background: #ffeeee;
-				border-radius: 10px;
-				border: 1px solid #110000;
-				text-align: center;
-			}
-		</style>
+		<link rel="stylesheet" type="text/css" href="/styles.css">
 	</head>
 	<body>
 		<header><h1><%= $title %></h1></header>
@@ -845,3 +793,56 @@ The form accepts "ordinary" search engine expressions. Details: <a href="http://
 		</div>
   </body>
 </html>
+
+@@ styles.css
+@media print {
+	.no-print, .no-print * {
+		display: none !important;
+	}
+}
+header {
+	text-align: center;
+}
+.children {
+	float: right;
+	width: 20ex;
+	background-color: #eeeeee;
+	margin: 10px;
+	border-radius: 5px;
+}
+#searchtext {
+	overflow: hidden;
+}
+#searchtext > .input {
+	width: 100%;
+}
+#searchbutton {
+	float: right;
+}
+.content_block {
+	text-align: justify;
+	margin: 5px;
+}
+.path_links, footer {
+	border: 1px solid black;
+}
+.edit_container {
+	display: block;
+	overflow: auto;
+	width: 100%;
+}
+.textarea, .preview {
+	width: 49%;
+	float: left;
+	height: 100%;
+}
+textarea {
+	width: 95%;
+	height: 100%;
+}
+.message {
+	background: #ffeeee;
+	border-radius: 10px;
+	border: 1px solid #110000;
+	text-align: center;
+}
