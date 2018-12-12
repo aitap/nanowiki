@@ -1,3 +1,4 @@
+- upgrade schema to FTS5
 - make the layout behave better on mobile
  - maybe potition the textarea vertically and ask it to occupy 100% width and some em height?
  - is flexbox what I need?
