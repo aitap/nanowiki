@@ -10,5 +10,7 @@
   - idea: dump concatenated Textile with proper links; rely on Pandoc for future processing
 - conflict detection: compare param("edit") (revision being edited) with mtime of last revision and suggest merging
  - this will require Algorithm::Diff and a new template
+- per-page file uploads
+ - stored in database or in public/ ?
 - CPANify
 - app->config(defaults => ...) wastes 2048 bits of random data on every launch :(
