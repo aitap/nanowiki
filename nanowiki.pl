@@ -115,7 +115,7 @@ end;",
 			) or die $dbh->error;
 			while (my $row = $result->array) {
 				my ($title, $text, $time) = @$row;
-				$title = "$_[0]/$title.txt";
+				$title = encode locale_fs => "$_[0]/$title.txt";
 				(my $dirname = $title) =~ s{/[^/]+$}{};
 				make_path encode locale_fs => $dirname;
 				open my $write, ">:utf8:crlf", encode locale_fs => $title;
@@ -402,7 +402,7 @@ sub check_captcha {
 	return (looks_like_number($to_check) and abs($to_check - $answer) <= 1e-2);
 }
 
-helper check_human => sub { # to be used in edit.htm and post controller
+helper check_human => sub { # checks for a valid session in the database with human==1
 	my $c = shift;
 	my $id = $c->session('id');
 	my $dbh = $c->dbh();
@@ -429,7 +429,24 @@ helper check_human => sub { # to be used in edit.htm and post controller
 			$c->session(id => $id); # touch session->id to make it last longer; XXX: is it needed?
 			return 1; # confirmed human; free to pass
 		}
-	} # else there is no valid session in the first place => possible unhuman
+	} elsif (defined($config->{password})) { # maybe we have password authentication enabled instead?
+		my $to_check = $c->param('password');
+		if (defined $to_check and $config->{password} eq $to_check) {
+			# no session, just entered a valid password
+			$id = Session::Token::->new(entropy => $config->{session_entropy})->get;
+			$dbh->insert(
+				'sessions',
+				{
+					id => $id, human => 1, answer => "<password>",
+					expires => time + $config->{session_timeout},
+				}
+			) or die $dbh->error;
+			$c->session(id => $id);
+			return 1;
+		} else {
+			$c->stash(msg => "Invalid password") if defined($to_check);
+		}
+	}
 	return;
 };
 
@@ -541,11 +558,11 @@ helper 'render_list_revisions' => sub {
 
 get sub {
 	my $c = shift;
+	return $c->render('password', status => 403) if (defined($config->{password}) and !$c->check_human());
 	my $parent = $c->stash("parent");
 	my $title = $c->stash("title");
 	my $edit = $c->param('edit');
 	my $rev = $c->param('rev');
-	my $dbh = $c->dbh;
 	if (defined($edit)) { # show edit form
 		return $c->render_edit_form($edit, $parent, $title);
 	} elsif (defined($rev)) {
@@ -659,6 +676,10 @@ helper handle_search => sub {
 
 post sub {
 	my $c = shift;
+	# check access right if we have a password
+	return $c->render('password', status => 403) if (defined($config->{password}) and !$c->check_human());
+	# just allowed => redirect to a page
+	return $c->redirect_to($c->url_for("/".$c->stash("fullpath"))) if defined($c->param("password"));
 	my $src = $c->param("src");
 	my $search = $c->param("search");
 	if (defined($search)) {
@@ -758,6 +779,19 @@ __DATA__
 	<div class="message">Not found</div>
 <% } %>
 The form accepts "ordinary" search engine expressions. Details: <a href="http://sqlite.org/fts3.html#section_3">Full-text Index Queries</a>
+
+@@ password.html.ep
+% layout 'default';
+<% if (my $msg = $self->stash("msg")) { %>
+	<div class="message"><%= $msg %></div>
+<% } %>
+<div style='align-items: center; display: flex; justify-content: center;'>
+	<form method='post'>
+		Password required: <input type="password" name="password">
+		%= csrf_field;
+		<input type="submit">
+	</form>
+</div>
 
 @@ exception.production.html.ep
 % layout 'default';

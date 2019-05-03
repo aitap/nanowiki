@@ -1,9 +1,7 @@
 - upgrade schema to FTS5
 - make the layout behave better on mobile
  - maybe potition the textarea vertically and ask it to occupy 100% width and some em height?
- - is flexbox what I need?
-- optional password protection
- (because it's fast and convinient if not very secure to share a single password between a small group of people)
+ - use automagical Flexible Boxes https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Flexible_Box_Layout/Using_CSS_flexible_boxes
 - admincmds
  - dump into single HTML page (regenerated)
   - inter-page links will require special handling; hopefully The Link-Processing Regexp won't need to be copypasted
