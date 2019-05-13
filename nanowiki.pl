@@ -64,21 +64,23 @@ sub run {
 );",
 "create index sessions_id_expires on sessions (id, expires);", # look up whether a session is valid
 "create index sessions_expires on sessions (expires);", # clean up stale sessions
-'create virtual table ftsindex using fts4(content="pages",src,title,tokenize=unicode61)',
+'create virtual table ftsindex using fts5(content="pages",src,title,tokenize=unicode61)',
+# FIXME: fts5 docs recommend INSERT INTO ftsindex(ftsindex, rowid, src, title) VALUES('delete', old.rowid, old.src, old.title);
+# but DELETE also seems to be working. Why?
 "create trigger pages_before_delete before delete on pages begin
-	delete from ftsindex where docid=old.rowid;
+	delete from ftsindex where rowid=old.rowid;
 end;",
 "create trigger pages_before_update before update on pages begin
-	delete from ftsindex where docid=old.rowid;
+	delete from ftsindex where rowid=old.rowid;
 end;",
 "create trigger pages_after_update after update on pages begin
-	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.parent||'/'||new.title);
+	insert into ftsindex(rowid,src,title) values(new.rowid,new.src,new.parent||'/'||new.title);
 end;", # parent||'/'||title doesn't produce valid link in case of empty parent, but links are generated fresh from pages table
 "create trigger pages_before_insert before insert on pages begin
-	delete from ftsindex where docid in (select rowid from pages where title=new.parent||'/'||new.title);
+	delete from ftsindex where rowid in (select rowid from pages where title=new.parent||'/'||new.title);
 end;",
 "create trigger pages_after_insert after insert on pages begin
-	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.parent||'/'||new.title);
+	insert into ftsindex(rowid,src,title) values(new.rowid,new.src,new.parent||'/'||new.title);
 end;",
 "pragma user_version = ".$self->app->schema_version.";"
 			);
@@ -196,21 +198,21 @@ end;",
 					# create the FTS table
 'create virtual table ftsindex using fts4(content="pages",src,title,tokenize=unicode61)',
 "create trigger pages_before_update before update on pages begin
-	delete from ftsindex where docid=old.rowid;
+	delete from ftsindex where rowid=old.rowid;
 end;",
 "create trigger pages_before_delete before delete on pages begin
-	delete from ftsindex where docid=old.rowid;
+	delete from ftsindex where rowid=old.rowid;
 end;",
 "create trigger pages_after_update after update on pages begin
-	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title);
+	insert into ftsindex(rowid,src,title) values(new.rowid,new.src,new.title);
 end;",
 "create trigger pages_before_insert before insert on pages begin
-	delete from ftsindex where docid in (select rowid from pages where title=new.title);
+	delete from ftsindex where rowid in (select rowid from pages where title=new.title);
 end;",
 "create trigger pages_after_insert after insert on pages begin
-	insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.title);
+	insert into ftsindex(rowid,src,title) values(new.rowid,new.src,new.title);
 end;",
-"insert into ftsindex(docid,src,title)
+"insert into ftsindex(rowid,src,title)
 	select p.rowid, p.src, p.title from pages p
 		inner join (select title, max(time) as latest from pages group by title) gp
 		on gp.title == p.title and p.time == gp.latest;", # populate index with latest revisions
@@ -248,20 +250,23 @@ end;",
 					"create index pages_parent_title on pages (parent, title);",
 					"create index pages_parent on pages (parent);",
 					"create trigger pages_before_delete before delete on pages begin
-						delete from ftsindex where docid=old.rowid;
+						delete from ftsindex where rowid=old.rowid;
 					end;",
 					"create trigger pages_before_update before update on pages begin
-						delete from ftsindex where docid=old.rowid;
+						delete from ftsindex where rowid=old.rowid;
 					end;",
 					"create trigger pages_after_update after update on pages begin
-						insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.parent||'/'||new.title);
+						insert into ftsindex(rowid,src,title) values(new.rowid,new.src,new.parent||'/'||new.title);
 					end;",
 					"create trigger pages_before_insert before insert on pages begin
-						delete from ftsindex where docid in (select rowid from pages where title=new.parent||'/'||new.title);
+						delete from ftsindex where rowid in (select rowid from pages where title=new.parent||'/'||new.title);
 					end;",
 					"create trigger pages_after_insert after insert on pages begin
-						insert into ftsindex(docid,src,title) values(new.rowid,new.src,new.parent||'/'||new.title);
+						insert into ftsindex(rowid,src,title) values(new.rowid,new.src,new.parent||'/'||new.title);
 					end;",
+				],
+				[
+					sub { ... },
 				],
 			);
 			my $dbh = $self->app->dbh;
@@ -312,7 +317,7 @@ use Text::Textile 'textile';
 use Scalar::Util 'looks_like_number';
 
 app->attr(conffile => $ENV{NANOWIKI_CONFIG} // "nanowiki.cnf"); # to use it from ::command
-app->attr(schema_version => 2);
+app->attr(schema_version => 3);
 
 my $config = {%{plugin Config => {
 	file => app->conffile, default => {
@@ -651,14 +656,14 @@ helper handle_search => sub {
 		from pages join
 			(
 				select
-					docid as idxid,
-					snippet(ftsindex) as snip,
-					searchrank(matchinfo(ftsindex,'pcx'),0.5,1.0) as rkval
+					rowid as idxid,
+					snippet(ftsindex, -1, '<b>', '</b>', '...', 7) as snip,
+					rank
 				from ftsindex
-				where src match ?
+				where ftsindex match ?
 			)
 			on pages.rowid = idxid
-		order by rkval desc
+		order by rank desc
 		;
 	", $search) or die $dbh->error;
 	# process_source to make sure there are no HTML injections, but keep HTML from SQLite snippet function
@@ -778,7 +783,7 @@ __DATA__
 <% } else { %>
 	<div class="message">Not found</div>
 <% } %>
-The form accepts "ordinary" search engine expressions. Details: <a href="http://sqlite.org/fts3.html#section_3">Full-text Index Queries</a>
+The form accepts "ordinary" search engine expressions. Details: <a href="http://sqlite.org/fts3.html#full_text_index_queries">Full-text Index Queries</a>
 
 @@ password.html.ep
 % layout 'default';
