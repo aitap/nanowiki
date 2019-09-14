@@ -339,35 +339,11 @@ $config->{get_captcha} ||= \&get_captcha;
 $config->{check_captcha} ||= \&check_captcha;
 
 helper 'dbh' => sub {
-	my $dbh = DBIx::Simple::->connect("dbi:SQLite:dbname=".$config->{sqlite_filename},"","",{
+	DBIx::Simple::->connect("dbi:SQLite:dbname=".$config->{sqlite_filename},"","",{
 		sqlite_unicode => 1,
 		AutoCommit => 1,
 		RaiseError => 1,
 	});
-	# ->dbh to get the DBI object
-	$dbh->dbh->sqlite_create_function("searchrank", -1, sub {
-		use List::Util "sum";
-		my ($matchinfo_blob, @weights) = @_;
-		# when called with "pcx" arguments (default), matchinfo returns:
-		# - number of phrases
-		# - number of columns
-		# - {
-		#   - [+0] num(appears here)
-		#   - [+1] sum(appearances): phrase appears in column
-		#   - [+2] num(rows): phrase appears in column
-		#   } per column, then per phrase
-		# = 32-bit unsigned integers in machine byte-order
-		my ($nphrases, $ncols, @matchinfo) = unpack "L*", $matchinfo_blob;
-		# rank = sum { <appears here> / <appears in column> * weight } per phrase per column
-		return sum map {
-			my $phrase = $_;
-			sum map {
-				my $nhits = $matchinfo[3*($phrase*$ncols+$_)];
-				$nhits ? ($nhits / $matchinfo[3*($phrase*$ncols+$_)+1] * $weights[$_]) : ()
-			} (0 .. $ncols)
-		} (0 .. $nphrases-1);
-	});
-	return $dbh;
 };
 
 app->dbh->query("pragma user_version;")->into(my $dbversion);
